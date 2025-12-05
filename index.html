@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Student Attendance System</title>
+    <link rel="stylesheet" href="Css/style.css">
+</head>
+<body>
+    <!-- Login Section -->
+    <div id="login-section" class="section active">
+        <div class="login-container">
+            <h2>Attendance System Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" required>
+                        <option value="">Select Role</option>
+                        <option value="admin">Administrator</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="student">Student</option>
+                    </select>
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            <div id="login-message" class="message"></div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" class="section">
+        <header>
+            <h1>Admin Dashboard</h1>
+            <button id="admin-logout" class="logout-btn">Logout</button>
+        </header>
+        
+        <div class="dashboard-content">
+            <div class="sidebar">
+                <button class="nav-btn active" data-target="student-management">Student Management</button>
+                <button class="nav-btn" data-target="user-management">User Management</button>
+                <button class="nav-btn" data-target="reports">Reports</button>
+                <button class="nav-btn" data-target="system-settings">System Settings</button>
+            </div>
+            
+            <div class="main-content">
+                <!-- Student Management -->
+                <div id="student-management" class="content-section active">
+                    <h2>Student Management</h2>
+                    <div class="action-bar">
+                        <button id="add-student-btn" class="btn-primary">Add New Student</button>
+                    </div>
+                    <div id="students-list" class="data-table-container"></div>
+                </div>
+                
+                <!-- User Management -->
+                <div id="user-management" class="content-section">
+                    <h2>User Management</h2>
+                    <div class="action-bar">
+                        <button id="add-user-btn" class="btn-primary">Create User Account</button>
+                    </div>
+                    <div id="users-list" class="data-table-container"></div>
+                </div>
+                
+                <!-- Reports -->
+                <div id="reports" class="content-section">
+                    <h2>Attendance Reports</h2>
+                    <div class="filter-bar">
+                        <select id="report-class-filter">
+                            <option value="">All Classes</option>
+                        </select>
+                        <input type="month" id="report-month-filter">
+                        <button id="generate-report-btn" class="btn-primary">Generate Report</button>
+                        <button id="export-pdf-btn" class="btn-secondary">Export PDF</button>
+                    </div>
+                    <div id="report-results"></div>
+                </div>
+                
+                <!-- System Settings -->
+                <div id="system-settings" class="content-section">
+                    <h2>System Settings</h2>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>Attendance Threshold (%):</label>
+                            <input type="number" id="attendance-threshold" min="0" max="100" value="75">
+                        </div>
+                        <button id="save-settings" class="btn-primary">Save Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Dashboard -->
+    <div id="teacher-dashboard" class="section">
+        <header>
+            <h1>Teacher Dashboard</h1>
+            <button id="teacher-logout" class="logout-btn">Logout</button>
+        </header>
+        
+        <div class="dashboard-content">
+            <div class="sidebar">
+                <button class="nav-btn active" data-target="take-attendance">Take Attendance</button>
+                <button class="nav-btn" data-target="view-attendance">View Records</button>
+                <button class="nav-btn" data-target="teacher-reports">Reports</button>
+                <button class="nav-btn" data-target="qr-attendance">QR Attendance</button>
+            </div>
+            
+            <div class="main-content">
+                <!-- Take Attendance -->
+                <div id="take-attendance" class="content-section active">
+                    <h2>Take Attendance</h2>
+                    <div class="class-selector">
+                        <select id="class-select">
+                            <option value="">Select Class</option>
+                        </select>
+                        <select id="subject-select">
+                            <option value="">Select Subject</option>
+                        </select>
+                        <button id="load-students-btn" class="btn-primary">Load Students</button>
+                    </div>
+                    <div id="attendance-form-container"></div>
+                    <div id="import-section">
+                        <h3>Import Attendance</h3>
+                        <input type="file" id="import-file" accept=".csv,.xlsx">
+                        <button id="import-btn" class="btn-secondary">Import</button>
+                    </div>
+                </div>
+                
+                <!-- View Attendance Records -->
+                <div id="view-attendance" class="content-section">
+                    <h2>Attendance Records</h2>
+                    <div class="filter-bar">
+                        <select id="filter-class">
+                            <option value="">All Classes</option>
+                        </select>
+                        <select id="filter-subject">
+                            <option value="">All Subjects</option>
+                        </select>
+                        <input type="date" id="filter-date">
+                        <button id="apply-filters" class="btn-primary">Apply Filters</button>
+                        <button id="export-csv" class="btn-secondary">Export CSV</button>
+                    </div>
+                    <div id="attendance-records" class="data-table-container"></div>
+                </div>
+                
+                <!-- Teacher Reports -->
+                <div id="teacher-reports" class="content-section">
+                    <h2>Monthly Reports</h2>
+                    <div class="report-controls">
+                        <select id="report-class">
+                            <option value="">Select Class</option>
+                        </select>
+                        <input type="month" id="report-month">
+                        <button id="generate-monthly-report" class="btn-primary">Generate Report</button>
+                        <button id="export-report-pdf" class="btn-secondary">Export PDF</button>
+                    </div>
+                    <div id="monthly-report-results"></div>
+                </div>
+                
+                <!-- QR Attendance -->
+                <div id="qr-attendance" class="content-section">
+                    <h2>QR Code Attendance</h2>
+                    <div class="qr-controls">
+                        <select id="qr-class-select">
+                            <option value="">Select Class</option>
+                        </select>
+                        <select id="qr-subject-select">
+                            <option value="">Select Subject</option>
+                        </select>
+                        <button id="generate-qr" class="btn-primary">Generate QR Code</button>
+                    </div>
+                    <div id="qr-code-container"></div>
+                    <!-- <div id="qr-scanner">
+                        <h3>Scan QR Code</h3>
+                        <video id="qr-video" width="300" height="200"></video>
+                        <button id="start-scan" class="btn-primary">Start Scanner</button>
+                    </div> -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Dashboard -->
+    <div id="student-dashboard" class="section">
+        <header>
+            <h1>Student Dashboard</h1>
+            <button id="student-logout" class="logout-btn">Logout</button>
+        </header>
+        
+        <div class="dashboard-content">
+            <div class="sidebar">
+                <button class="nav-btn active" data-target="my-attendance">My Attendance</button>
+                <button class="nav-btn" data-target="scan-qr">Scan QR Code</button>
+                <button class="nav-btn" data-target="attendance-stats">Statistics</button>
+                <button class="nav-btn" data-target="notifications">Notifications</button>
+            </div>
+            
+            <div class="main-content">
+                <!-- My Attendance -->
+                <div id="my-attendance" class="content-section active">
+                    <h2>My Attendance</h2>
+                    <div class="attendance-summary">
+                        <div class="summary-card">
+                            <h3>Overall Attendance</h3>
+                            <div id="attendance-percentage" class="percentage">0%</div>
+                        </div>
+                    </div>
+                    <div id="student-attendance-records" class="data-table-container"></div>
+                </div>
+                
+                <!-- Scan QR Code -->
+                <div id="scan-qr" class="content-section">
+                    <h2>Scan QR Code for Attendance</h2>
+                    <div class="qr-scan-container">
+                        <div id="qr-reader" style="width: 100%; max-width: 500px; margin: 20px auto;"></div>
+                        <div id="qr-reader-results"></div>
+                        <div id="location-status" style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                            <strong>Location Status:</strong> <span id="location-text">Requesting location...</span>
+                        </div>
+                        <button id="start-qr-scanner" class="btn-primary" style="display: block; margin: 20px auto;">Start QR Scanner</button>
+                        <button id="stop-qr-scanner" class="btn-secondary" style="display: none; margin: 20px auto;">Stop Scanner</button>
+                    </div>
+                </div>
+                
+                <!-- Attendance Statistics -->
+                <div id="attendance-stats" class="content-section">
+                    <h2>Attendance Statistics</h2>
+                    <div class="stats-container">
+                        <canvas id="attendance-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Notifications -->
+                <div id="notifications" class="content-section">
+                    <h2>Notifications</h2>
+                    <div id="notifications-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Modal Title</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Modal content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- Excel/CSV Import Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script src="js/auth.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/teacher.js"></script>
+    <script src="js/student.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</body>
+</html>

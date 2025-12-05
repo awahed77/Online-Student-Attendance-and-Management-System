@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Tracking Sheet - Online Student Attendance System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #34495e;
+        }
+        
+        .filter-group select, .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-card.critical {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .stat-card.high {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        
+        .stat-card.medium {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .stat-card.low {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        
+        thead {
+            background: #34495e;
+            color: white;
+        }
+        
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .severity-critical {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .severity-high {
+            background: #e67e22;
+            color: white;
+        }
+        
+        .severity-medium {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .severity-low {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .priority-p1 {
+            background: #c0392b;
+            color: white;
+        }
+        
+        .priority-p2 {
+            background: #e67e22;
+            color: white;
+        }
+        
+        .priority-p3 {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .priority-p4 {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .status-new {
+            background: #3498db;
+            color: white;
+        }
+        
+        .status-assigned {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .status-in-progress {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .status-fixed {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .status-verified {
+            background: #16a085;
+            color: white;
+        }
+        
+        .status-closed {
+            background: #7f8c8d;
+            color: white;
+        }
+        
+        .status-rejected {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .bug-id {
+            font-weight: bold;
+            color: #3498db;
+            cursor: pointer;
+        }
+        
+        .bug-id:hover {
+            text-decoration: underline;
+        }
+        
+        .description {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .btn-edit {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-view {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .export-buttons {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-export {
+            padding: 10px 20px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .btn-export:hover {
+            background: #229954;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐛 Bug Tracking Sheet</h1>
+        <div class="header-info">
+            <div>Project: Online Student Attendance System</div>
+            <div>Last Updated: <span id="last-updated"></span></div>
+        </div>
+        
+        <div class="export-buttons">
+            <button class="btn-export" onclick="exportToCSV()">Export to CSV</button>
+            <button class="btn-export" onclick="window.print()">Print Report</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card critical">
+                <div class="stat-number" id="stat-critical">0</div>
+                <div class="stat-label">Critical Bugs</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-number" id="stat-high">0</div>
+                <div class="stat-label">High Priority</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-number" id="stat-medium">0</div>
+                <div class="stat-label">Medium Priority</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-number" id="stat-low">0</div>
+                <div class="stat-label">Low Priority</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-total">0</div>
+                <div class="stat-label">Total Bugs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-open">0</div>
+                <div class="stat-label">Open Bugs</div>
+            </div>
+        </div>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label>Severity:</label>
+                <select id="filter-severity" onchange="filterTable()">
+                    <option value="">All</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="filter-status" onchange="filterTable()">
+                    <option value="">All</option>
+                    <option value="New">New</option>
+                    <option value="Assigned">Assigned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Fixed">Fixed</option>
+                    <option value="Verified">Verified</option>
+                    <option value="Closed">Closed</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Priority:</label>
+                <select id="filter-priority" onchange="filterTable()">
+                    <option value="">All</option>
+                    <option value="P1">P1</option>
+                    <option value="P2">P2</option>
+                    <option value="P3">P3</option>
+                    <option value="P4">P4</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>FR:</label>
+                <select id="filter-fr" onchange="filterTable()">
+                    <option value="">All</option>
+                    <option value="FR1">FR1</option>
+                    <option value="FR2">FR2</option>
+                    <option value="FR3">FR3</option>
+                    <option value="FR4">FR4</option>
+                    <option value="FR5">FR5</option>
+                    <option value="FR6">FR6</option>
+                    <option value="FR7">FR7</option>
+                    <option value="FR8">FR8</option>
+                    <option value="FR9">FR9</option>
+                    <option value="FR10">FR10</option>
+                    <option value="FR11">FR11</option>
+                    <option value="FR12">FR12</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Search:</label>
+                <input type="text" id="search-input" placeholder="Search bugs..." onkeyup="filterTable()">
+            </div>
+        </div>
+        
+        <table id="bug-table">
+            <thead>
+                <tr>
+                    <th>Bug ID</th>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>FR</th>
+                    <th>Severity</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Assigned To</th>
+                    <th>Reported Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="bug-tbody">
+                <!-- Bugs will be populated here -->
+            </tbody>
+        </table>
+    </div>
+    
+    <script>
+        // Sample bug data
+        const bugs = [
+            {
+                id: 'BUG-001',
+                title: 'Login fails with correct credentials',
+                description: 'Users cannot login even with correct username and password. Error occurs for all roles.',
+                fr: 'FR12',
+                severity: 'Critical',
+                priority: 'P1',
+                status: 'Fixed',
+                assignedTo: 'Developer A',
+                reportedDate: '2024-10-01',
+                reportedBy: 'Tester 1'
+            },
+            {
+                id: 'BUG-002',
+                title: 'QR code not generating properly',
+                description: 'QR code displays as text instead of scannable image. QR Server API may be failing.',
+                fr: 'FR10',
+                severity: 'High',
+                priority: 'P1',
+                status: 'Fixed',
+                assignedTo: 'Developer B',
+                reportedDate: '2024-10-02',
+                reportedBy: 'Tester 2'
+            },
+            {
+                id: 'BUG-003',
+                title: 'Attendance percentage calculation incorrect',
+                description: 'Student attendance percentage shows wrong value. Late status counted as absent.',
+                fr: 'FR2',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer C',
+                reportedDate: '2024-10-03',
+                reportedBy: 'Tester 1'
+            },
+            {
+                id: 'BUG-004',
+                title: 'Cannot add new students as admin',
+                description: 'Error occurs when admin tries to add new student. localStorage quota exceeded error.',
+                fr: 'FR6',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer A',
+                reportedDate: '2024-10-04',
+                reportedBy: 'Tester 3'
+            },
+            {
+                id: 'BUG-005',
+                title: 'CSV import fails with special characters',
+                description: 'CSV import fails when data contains commas or quotes. Parser needs improvement.',
+                fr: 'FR4',
+                severity: 'Medium',
+                priority: 'P3',
+                status: 'In Progress',
+                assignedTo: 'Developer B',
+                reportedDate: '2024-10-05',
+                reportedBy: 'Tester 2'
+            },
+            {
+                id: 'BUG-006',
+                title: 'PDF export missing some data',
+                description: 'PDF export does not include all attendance records. Some rows are truncated.',
+                fr: 'FR8',
+                severity: 'Medium',
+                priority: 'P3',
+                status: 'Assigned',
+                assignedTo: 'Developer C',
+                reportedDate: '2024-10-06',
+                reportedBy: 'Tester 1'
+            },
+            {
+                id: 'BUG-007',
+                title: 'Notifications not triggering for low attendance',
+                description: 'Automatic notifications not created when student attendance falls below threshold.',
+                fr: 'FR5',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer A',
+                reportedDate: '2024-10-07',
+                reportedBy: 'Tester 3'
+            },
+            {
+                id: 'BUG-008',
+                title: 'Filter by date not working correctly',
+                description: 'Date filter shows records from other dates. Date comparison logic has issue.',
+                fr: 'FR7',
+                severity: 'Medium',
+                priority: 'P3',
+                status: 'Fixed',
+                assignedTo: 'Developer B',
+                reportedDate: '2024-10-08',
+                reportedBy: 'Tester 2'
+            },
+            {
+                id: 'BUG-009',
+                title: 'Monthly report shows wrong month data',
+                description: 'Monthly report includes data from previous month. Date range calculation incorrect.',
+                fr: 'FR3',
+                severity: 'Medium',
+                priority: 'P3',
+                status: 'Fixed',
+                assignedTo: 'Developer C',
+                reportedDate: '2024-10-09',
+                reportedBy: 'Tester 1'
+            },
+            {
+                id: 'BUG-010',
+                title: 'QR code scanner not working on mobile',
+                description: 'HTML5 QR scanner fails to initialize on mobile devices. Camera permission issue.',
+                fr: 'FR10',
+                severity: 'High',
+                priority: 'P2',
+                status: 'In Progress',
+                assignedTo: 'Developer B',
+                reportedDate: '2024-10-10',
+                reportedBy: 'Tester 3'
+            },
+            {
+                id: 'BUG-011',
+                title: 'Edit attendance record updates wrong record',
+                description: 'Clicking edit on one record opens modal with different record data. ID mismatch.',
+                fr: 'FR9',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer A',
+                reportedDate: '2024-10-11',
+                reportedBy: 'Tester 2'
+            },
+            {
+                id: 'BUG-012',
+                title: 'User creation allows duplicate usernames',
+                description: 'System allows creating users with same username. Validation missing.',
+                fr: 'FR11',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer C',
+                reportedDate: '2024-10-12',
+                reportedBy: 'Tester 1'
+            },
+            {
+                id: 'BUG-013',
+                title: 'Session not persisting after page refresh',
+                description: 'User logged out after page refresh. Session storage not working properly.',
+                fr: 'FR12',
+                severity: 'High',
+                priority: 'P2',
+                status: 'Fixed',
+                assignedTo: 'Developer A',
+                reportedDate: '2024-10-13',
+                reportedBy: 'Tester 3'
+            },
+            {
+                id: 'BUG-014',
+                title: 'Load students button does nothing',
+                description: 'Clicking Load Students button does not display student list. Event listener issue.',
+                fr: 'FR1',
+                severity: 'Critical',
+                priority: 'P1',
+                status: 'Fixed',
+                assignedTo: 'Developer B',
+                reportedDate: '2024-10-14',
+                reportedBy: 'Tester 2'
+            },
+            {
+                id: 'BUG-015',
+                title: 'Excel import not supported',
+                description: 'System only supports CSV. Excel files (.xlsx) cannot be imported.',
+                fr: 'FR4',
+                severity: 'Medium',
+                priority: 'P3',
+                status: 'Fixed',
+                assignedTo: 'Developer C',
+                reportedDate: '2024-10-15',
+                reportedBy: 'Tester 1'
+            }
+        ];
+        
+        let filteredBugs = [...bugs];
+        
+        function renderTable() {
+            const tbody = document.getElementById('bug-tbody');
+            tbody.innerHTML = '';
+            
+            filteredBugs.forEach(bug => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="bug-id">${bug.id}</td>
+                    <td>${bug.title}</td>
+                    <td class="description" title="${bug.description}">${bug.description}</td>
+                    <td>${bug.fr}</td>
+                    <td><span class="badge severity-${bug.severity.toLowerCase()}">${bug.severity}</span></td>
+                    <td><span class="badge priority-${bug.priority.toLowerCase()}">${bug.priority}</span></td>
+                    <td><span class="badge status-${bug.status.toLowerCase().replace(' ', '-')}">${bug.status}</span></td>
+                    <td>${bug.assignedTo}</td>
+                    <td>${bug.reportedDate}</td>
+                    <td class="actions">
+                        <button class="btn btn-view" onclick="viewBug('${bug.id}')">View</button>
+                        <button class="btn btn-edit" onclick="editBug('${bug.id}')">Edit</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            updateStats();
+        }
+        
+        function filterTable() {
+            const severityFilter = document.getElementById('filter-severity').value;
+            const statusFilter = document.getElementById('filter-status').value;
+            const priorityFilter = document.getElementById('filter-priority').value;
+            const frFilter = document.getElementById('filter-fr').value;
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            
+            filteredBugs = bugs.filter(bug => {
+                if (severityFilter && bug.severity !== severityFilter) return false;
+                if (statusFilter && bug.status !== statusFilter) return false;
+                if (priorityFilter && bug.priority !== priorityFilter) return false;
+                if (frFilter && bug.fr !== frFilter) return false;
+                if (searchTerm && !bug.title.toLowerCase().includes(searchTerm) && 
+                    !bug.description.toLowerCase().includes(searchTerm) && 
+                    !bug.id.toLowerCase().includes(searchTerm)) return false;
+                return true;
+            });
+            
+            renderTable();
+        }
+        
+        function updateStats() {
+            const critical = bugs.filter(b => b.severity === 'Critical').length;
+            const high = bugs.filter(b => b.severity === 'High').length;
+            const medium = bugs.filter(b => b.severity === 'Medium').length;
+            const low = bugs.filter(b => b.severity === 'Low').length;
+            const total = bugs.length;
+            const open = bugs.filter(b => !['Fixed', 'Verified', 'Closed'].includes(b.status)).length;
+            
+            document.getElementById('stat-critical').textContent = critical;
+            document.getElementById('stat-high').textContent = high;
+            document.getElementById('stat-medium').textContent = medium;
+            document.getElementById('stat-low').textContent = low;
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-open').textContent = open;
+        }
+        
+        function viewBug(id) {
+            const bug = bugs.find(b => b.id === id);
+            if (bug) {
+                alert(`Bug Details:\n\nID: ${bug.id}\nTitle: ${bug.title}\nDescription: ${bug.description}\nFR: ${bug.fr}\nSeverity: ${bug.severity}\nPriority: ${bug.priority}\nStatus: ${bug.status}\nAssigned To: ${bug.assignedTo}\nReported: ${bug.reportedDate}`);
+            }
+        }
+        
+        function editBug(id) {
+            alert(`Edit functionality would open a form for bug: ${id}`);
+        }
+        
+        function exportToCSV() {
+            let csv = 'Bug ID,Title,Description,FR,Severity,Priority,Status,Assigned To,Reported Date\n';
+            bugs.forEach(bug => {
+                csv += `"${bug.id}","${bug.title}","${bug.description}","${bug.fr}","${bug.severity}","${bug.priority}","${bug.status}","${bug.assignedTo}","${bug.reportedDate}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bug_tracking_report.csv';
+            a.click();
+        }
+        
+        // Initialize
+        document.getElementById('last-updated').textContent = new Date().toLocaleDateString();
+        renderTable();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,234 @@
+// Student System
+class StudentSystem {
+    constructor() {
+        this.currentStudent = authSystem.currentUser;
+        this.init();
+    }
+
+    init() {
+        this.setupNavigation();
+        this.setupEventListeners();
+        this.loadStudentData();
+    }
+
+    setupNavigation() {
+        const navButtons = document.querySelectorAll('#student-dashboard .nav-btn');
+        navButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const target = e.target.getAttribute('data-target');
+                this.showSection(target);
+            });
+        });
+    }
+
+    showSection(sectionId) {
+        document.querySelectorAll('#student-dashboard .content-section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        document.querySelectorAll('#student-dashboard .nav-btn').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        document.getElementById(sectionId).classList.add('active');
+        document.querySelector(`[data-target="${sectionId}"]`).classList.add('active');
+    }
+
+    setupEventListeners() {
+        // Load data when switching to specific sections
+        document.querySelector('[data-target="attendance-stats"]').addEventListener('click', () => {
+            this.loadAttendanceChart();
+        });
+        
+        document.querySelector('[data-target="notifications"]').addEventListener('click', () => {
+            this.loadNotifications();
+        });
+    }
+
+    loadStudentData() {
+        this.loadAttendanceSummary();
+        this.loadAttendanceRecords();
+        this.loadNotifications();
+    }
+
+    loadAttendanceSummary() {
+        const percentage = commonSystem.calculateAttendancePercentage(this.currentStudent.studentId);
+        document.getElementById('attendance-percentage').textContent = `${percentage}%`;
+        
+        // Color code based on threshold
+        const percentageElement = document.getElementById('attendance-percentage');
+        if (percentage < commonSystem.settings.attendanceThreshold) {
+            percentageElement.style.color = '#e74c3c';
+        } else {
+            percentageElement.style.color = '#2ecc71';
+        }
+    }
+
+    loadAttendanceRecords() {
+        const studentRecords = commonSystem.attendanceData.filter(record => 
+            record.studentId === this.currentStudent.studentId
+        );
+
+        const container = document.getElementById('student-attendance-records');
+        
+        if (studentRecords.length === 0) {
+            container.innerHTML = '<p>No attendance records found.</p>';
+            return;
+        }
+
+        let html = `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Class</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Marked By</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // Sort by date, most recent first
+        studentRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        studentRecords.forEach(record => {
+            html += `
+                <tr>
+                    <td>${commonSystem.formatDate(record.date)}</td>
+                    <td>${record.class}</td>
+                    <td>${record.subject}</td>
+                    <td>
+                        <span class="status-${record.status}">
+                            ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                        </span>
+                    </td>
+                    <td>${record.markedBy}</td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    loadAttendanceChart() {
+        const ctx = document.getElementById('attendance-chart').getContext('2d');
+        const studentRecords = commonSystem.attendanceData.filter(record => 
+            record.studentId === this.currentStudent.studentId
+        );
+
+        // Group by subject and calculate percentages
+        const subjectStats = {};
+        commonSystem.subjects.forEach(subject => {
+            const subjectRecords = studentRecords.filter(record => record.subject === subject);
+            if (subjectRecords.length > 0) {
+                const presentCount = subjectRecords.filter(record => record.status === 'present').length;
+                subjectStats[subject] = Math.round((presentCount / subjectRecords.length) * 100);
+            }
+        });
+
+        const subjects = Object.keys(subjectStats);
+        const percentages = Object.values(subjectStats);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: subjects,
+                datasets: [{
+                    label: 'Attendance Percentage by Subject',
+                    data: percentages,
+                    backgroundColor: percentages.map(p => 
+                        p >= commonSystem.settings.attendanceThreshold ? '#2ecc71' : '#e74c3c'
+                    ),
+                    borderColor: '#34495e',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Percentage (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Subjects'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Attendance: ${context.parsed.y}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    loadNotifications() {
+        const notifications = commonSystem.getStudentNotifications(this.currentStudent.studentId);
+        const container = document.getElementById('notifications-list');
+        
+        if (notifications.length === 0) {
+            container.innerHTML = '<p>No notifications.</p>';
+            return;
+        }
+
+        let html = '';
+        notifications.forEach(notification => {
+            html += `
+                <div class="notification-item ${notification.type}">
+                    <div class="notification-message">${notification.message}</div>
+                    <div class="notification-date">${commonSystem.formatDate(notification.date)}</div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+}
+
+// Add CSS for status indicators
+const style = document.createElement('style');
+style.textContent = `
+    .status-present { color: #2ecc71; font-weight: bold; }
+    .status-absent { color: #e74c3c; font-weight: bold; }
+    .status-late { color: #f39c12; font-weight: bold; }
+    .notification-item {
+        background: white;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 5px;
+        border-left: 4px solid #3498db;
+    }
+    .notification-item.warning {
+        border-left-color: #e74c3c;
+    }
+    .notification-message {
+        font-weight: 500;
+    }
+    .notification-date {
+        font-size: 0.9em;
+        color: #7f8c8d;
+        margin-top: 5px;
+    }
+`;
+document.head.appendChild(style);
+
+// Initialize student system
+const studentSystem = new StudentSystem();

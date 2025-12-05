@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            width: 80%;
+            max-width: 300px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #message {
+            margin-top: 20px;
+            font-weight: bold;
+            min-height: 24px;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mark Your Attendance</h1>
+        <div>
+            <input type="text" id="studentName" placeholder="Enter your name" required>
+        </div>
+        <button id="markAttendanceBtn">Mark Attendance</button>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        // Get session ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session');
+        const markBtn = document.getElementById('markAttendanceBtn');
+        const messageEl = document.getElementById('message');
+
+        if (!sessionId) {
+            messageEl.textContent = 'Error: No session ID found. Please use the QR code provided by your teacher.';
+            messageEl.style.color = 'red';
+            markBtn.disabled = true;
+            return;
+        }
+
+        markBtn.addEventListener('click', function() {
+            const studentName = document.getElementById('studentName').value.trim();
+            
+            if (!studentName) {
+                messageEl.textContent = 'Please enter your name.';
+                messageEl.style.color = 'red';
+                return;
+            }
+
+            // Get or initialize attendance for this session
+            const storageKey = `attendance_${sessionId}`;
+            let attendance = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            
+            // Check if already marked attendance
+            const alreadyMarked = attendance.some(record => 
+                record.name.toLowerCase() === studentName.toLowerCase()
+            );
+            
+            if (alreadyMarked) {
+                messageEl.textContent = 'You have already marked your attendance!';
+                messageEl.style.color = 'orange';
+                return;
+            }
+            
+            // Add new attendance record
+            attendance.push({
+                name: studentName,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Save back to localStorage
+            localStorage.setItem(storageKey, JSON.stringify(attendance));
+            
+            // Update UI
+            markBtn.disabled = true;
+            document.getElementById('studentName').disabled = true;
+            messageEl.textContent = 'Attendance marked successfully!';
+            messageEl.style.color = 'green';
+        });
+    </script>
+</body>
+</html>
