@@ -492,15 +492,73 @@ class TeacherSystem {
         const qrString = JSON.stringify(qrData);
         const container = document.getElementById('qr-code-container');
         
-        // In a real application, you would use a QR code library like qrcode.js
-        // For this example, we'll display the data as text
+        // Create a simple QR code pattern as a fallback
+        const createDummyQRCode = () => {
+            const size = 200;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // White background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Create a simple pattern that looks like a QR code
+            const cellSize = 10;
+            const data = [
+                [1,1,1,1,1,1,1,0,0,0,1,1,0,1,0,1,1,1,1,1],
+                [1,0,0,0,0,0,1,0,1,1,0,0,1,0,0,1,0,0,0,1],
+                [1,0,1,1,1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1],
+                [1,0,1,1,1,0,1,0,1,0,0,1,1,0,0,1,0,1,0,1],
+                [1,0,1,1,1,0,1,0,1,1,0,0,1,0,0,1,0,0,0,1],
+                [1,0,0,0,0,0,1,0,1,0,1,0,1,0,0,1,1,1,1,1],
+                [1,1,1,1,1,1,1,0,1,0,1,0,1,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,1,1,0,1,1,0,1,1,0,1,0,1],
+                [1,1,0,1,0,0,1,1,1,0,0,1,0,1,1,1,0,0,1,1],
+                [1,0,1,1,0,1,0,1,0,0,1,0,0,1,0,0,1,0,1,0],
+                [0,1,1,0,0,1,1,0,1,0,1,0,1,1,0,1,0,1,1,0],
+                [0,1,0,1,0,0,1,1,1,1,0,1,0,0,1,1,0,1,0,1],
+                [1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,1,0,1],
+                [0,0,0,0,0,0,0,0,1,1,0,0,1,1,0,1,0,1,1,0],
+                [1,1,1,1,1,1,1,0,1,0,1,1,0,1,0,0,1,0,1,0],
+                [1,0,0,0,0,0,1,0,1,1,0,0,1,1,1,1,0,1,1,0],
+                [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0],
+                [1,0,1,1,1,0,1,0,1,0,1,1,0,1,0,1,1,0,1,0],
+                [1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,1,0,1,0,1],
+                [1,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,0,1,1,0]
+            ];
+            
+            // Draw the pattern
+            for (let y = 0; y < data.length; y++) {
+                for (let x = 0; x < data[y].length; x++) {
+                    if (data[y][x] === 1) {
+                        ctx.fillStyle = '#000000';
+                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                    }
+                }
+            }
+            
+            // Add some text
+            ctx.fillStyle = '#000000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('SAMPLE QR CODE', size/2, size - 10);
+            
+            return canvas.toDataURL();
+        };
+        
+        // Display the QR code or fallback
         container.innerHTML = `
-            <h4>QR Code Data for ${className} - ${subject}</h4>
+            <h4>QR Code for ${className} - ${subject}</h4>
+            <div style="margin: 20px 0; display: flex; justify-content: center;">
+                <img src="${createDummyQRCode()}" alt="QR Code" style="border: 1px solid #ccc; padding: 10px; background: white;">
+            </div>
             <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0;">
                 <strong>Scan this code with the student app:</strong><br>
-                ${qrString}
+                <pre>${qrString}</pre>
             </div>
-            <p><em>Note: In a real implementation, this would be a scannable QR code image</em></p>
+            <p><em>Note: This is a sample QR code for demonstration. In a real implementation, this would be a scannable QR code.</em></p>
         `;
     }
 

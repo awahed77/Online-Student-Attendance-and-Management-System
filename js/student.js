@@ -43,6 +43,17 @@ class StudentSystem {
         document.querySelector('[data-target="notifications"]').addEventListener('click', () => {
             this.loadNotifications();
         });
+
+        // QR Code Scanner
+        document.getElementById('start-qr-scanner').addEventListener('click', () => this.startQRScanner());
+        document.getElementById('stop-qr-scanner').addEventListener('click', () => this.stopQRScanner());
+        
+        // Check for geolocation support
+        if ('geolocation' in navigator) {
+            this.updateLocationStatus();
+        } else {
+            document.getElementById('location-text').textContent = 'Geolocation is not supported by your browser';
+        }
     }
 
     loadStudentData() {
@@ -178,6 +189,181 @@ class StudentSystem {
                 }
             }
         });
+    }
+
+    // QR Code Scanner Methods
+    async updateLocationStatus() {
+        const locationText = document.getElementById('location-text');
+        locationText.textContent = 'Getting location...';
+        
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+            
+            this.currentLocation = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            };
+            
+            locationText.textContent = `Location acquired (Accuracy: ${Math.round(this.currentLocation.accuracy)}m)`;
+            return true;
+        } catch (error) {
+            console.error('Error getting location:', error);
+            locationText.textContent = 'Error getting location. Please ensure location services are enabled.';
+            return false;
+        }
+    }
+
+    async startQRScanner() {
+        const hasLocation = await this.updateLocationStatus();
+        if (!hasLocation) {
+            commonSystem.showNotification('Please enable location services to scan QR codes', 'error');
+            return;
+        }
+
+        const startBtn = document.getElementById('start-qr-scanner');
+        const stopBtn = document.getElementById('stop-qr-scanner');
+        const qrReader = document.getElementById('qr-reader');
+        
+        // Clear previous scanner if any
+        if (this.html5QrCode) {
+            this.html5QrCode.clear();
+        }
+        
+        // Initialize scanner
+        this.html5QrCode = new Html5Qrcode("qr-reader");
+        
+        // Start scanning
+        try {
+            await this.html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: 250
+                },
+                (decodedText, decodedResult) => {
+                    // Handle the scanned code
+                    this.handleScannedCode(decodedText);
+                },
+                (errorMessage) => {
+                    // Parse error, ignore if it's just because the scanner was stopped
+                    if (errorMessage !== "QR code parse error, error = No QR code found.") {
+                        console.error(errorMessage);
+                    }
+                }
+            );
+            
+            // Update UI
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            qrReader.style.display = 'block';
+            
+        } catch (error) {
+            console.error('Error starting QR scanner:', error);
+            commonSystem.showNotification('Failed to start QR scanner. Please try again.', 'error');
+        }
+    }
+    
+    stopQRScanner() {
+        if (this.html5QrCode) {
+            this.html5QrCode.stop().then(ignore => {
+                // QR Code scanning is stopped.
+                const startBtn = document.getElementById('start-qr-scanner');
+                const stopBtn = document.getElementById('stop-qr-scanner');
+                
+                startBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+                
+                // Clear the scanner view
+                document.getElementById('qr-reader').innerHTML = '';
+            }).catch(err => {
+                console.error('Error stopping QR scanner:', err);
+            });
+        }
+    }
+    
+    async handleScannedCode(decodedText) {
+        try {
+            // Stop the scanner after successful scan
+            this.stopQRScanner();
+            
+            // Parse the QR code data (assuming format: classId:subjectId:teacherId:timestamp:latitude:longitude)
+            const [classId, subjectId, teacherId, timestamp, qrLat, qrLng] = decodedText.split(':');
+            const qrLocation = {
+                latitude: parseFloat(qrLat),
+                longitude: parseFloat(qrLng)
+            };
+            
+            // Verify location
+            const distance = this.calculateDistance(
+                this.currentLocation.latitude, 
+                this.currentLocation.longitude,
+                qrLocation.latitude,
+                qrLocation.longitude
+            );
+            
+            // If within 100 meters, mark attendance
+            if (distance <= 100) { // 100 meters
+                const currentTime = new Date();
+                const qrTime = new Date(parseInt(timestamp));
+                const timeDiffMinutes = (currentTime - qrTime) / (1000 * 60);
+                
+                if (timeDiffMinutes <= 15) { // Valid for 15 minutes
+                    // Mark attendance
+                    const attendanceRecord = {
+                        studentId: this.currentStudent.studentId,
+                        classId: classId,
+                        subjectId: subjectId,
+                        teacherId: teacherId,
+                        date: currentTime.toISOString(),
+                        status: 'present',
+                        markedBy: 'QR Code',
+                        location: this.currentLocation,
+                        qrData: decodedText
+                    };
+                    
+                    // Save attendance (in a real app, this would be an API call)
+                    commonSystem.attendanceData.push(attendanceRecord);
+                    commonSystem.saveData();
+                    
+                    // Show success message
+                    commonSystem.showNotification('Attendance marked successfully!', 'success');
+                    
+                    // Refresh attendance data
+                    this.loadAttendanceSummary();
+                    this.loadAttendanceRecords();
+                } else {
+                    commonSystem.showNotification('QR code has expired. Please ask your teacher for a new one.', 'error');
+                }
+            } else {
+                commonSystem.showNotification('You are too far from the class location to mark attendance.', 'error');
+            }
+        } catch (error) {
+            console.error('Error processing QR code:', error);
+            commonSystem.showNotification('Invalid QR code. Please try again.', 'error');
+        }
+    }
+    
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        // Haversine formula to calculate distance between two points on Earth
+        const R = 6371e3; // Earth's radius in meters
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // Distance in meters
     }
 
     loadNotifications() {
