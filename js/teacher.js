@@ -33,6 +33,86 @@ class TeacherSystem {
         
         document.getElementById(sectionId).classList.add('active');
         document.querySelector(`[data-target="${sectionId}"]`).classList.add('active');
+        
+        // If showing QR attendance section, check for active sessions and restart monitoring
+        if (sectionId === 'qr-attendance') {
+            this.checkAndResumeQRSession();
+        }
+    }
+    
+    checkAndResumeQRSession() {
+        // Check if there's an active QR session
+        const activeSessions = JSON.parse(localStorage.getItem('qr_active_sessions') || '{}');
+        const sessionIds = Object.keys(activeSessions);
+        
+        if (sessionIds.length > 0) {
+            // Get the most recent session
+            const latestSessionId = sessionIds.sort().pop();
+            const session = activeSessions[latestSessionId];
+            
+            // Check if session is still valid
+            const now = new Date();
+            const expiresAt = new Date(session.expiresAt);
+            
+            if (now < expiresAt) {
+                // Re-display the QR code and resume monitoring
+                this.displayActiveQRSession(latestSessionId, session);
+            } else {
+                // Session expired, clear it
+                delete activeSessions[latestSessionId];
+                localStorage.setItem('qr_active_sessions', JSON.stringify(activeSessions));
+            }
+        }
+    }
+    
+    displayActiveQRSession(sessionId, sessionData) {
+        const container = document.getElementById('qr-code-container');
+        
+        // Create QR code string
+        const qrString = JSON.stringify({
+            sessionId: sessionId,
+            class: sessionData.class,
+            subject: sessionData.subject
+        });
+        
+        // Clear container
+        container.innerHTML = '';
+        
+        // Create wrapper div for QR code
+        const qrCodeWrapper = document.createElement('div');
+        qrCodeWrapper.id = 'qrcode-display-' + sessionId;
+        qrCodeWrapper.style.cssText = 'margin: 20px 0; display: flex; justify-content: center;';
+        container.appendChild(qrCodeWrapper);
+        
+        // Generate QR code using QRCode library
+        this.generateQRCodeImage(qrCodeWrapper, qrString, sessionData.class, sessionData.subject);
+        
+        // Display session info and attendance list
+        const infoDiv = document.createElement('div');
+        infoDiv.innerHTML = `
+            <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <h4 style="margin-top: 0;">Active QR Code Session: ${sessionData.class} - ${sessionData.subject}</h4>
+                <p><strong>Session ID:</strong> ${sessionId}</p>
+                <p><strong>Valid until:</strong> ${new Date(sessionData.expiresAt).toLocaleString()}</p>
+                <p style="color: #2e7d32;"><strong>Display this QR code for students to scan</strong></p>
+            </div>
+            <div id="qr-attendance-list" style="margin-top: 20px;">
+                <h4>Attendance (Real-time)</h4>
+                <div id="qr-attendance-students" style="background: #f5f5f5; padding: 15px; border-radius: 5px; min-height: 100px;">
+                    <p style="color: #666;">Loading...</p>
+                </div>
+            </div>
+            <button id="stop-qr-session" class="btn-secondary" style="margin-top: 15px;">Stop Session</button>
+        `;
+        container.appendChild(infoDiv);
+        
+        // Setup stop session button
+        document.getElementById('stop-qr-session').addEventListener('click', () => {
+            this.stopQRSession(sessionId);
+        });
+        
+        // Start real-time monitoring
+        this.startRealTimeMonitoring(sessionId);
     }
 
     populateClassAndSubjectFilters() {
@@ -79,7 +159,6 @@ class TeacherSystem {
         
         // QR Attendance
         document.getElementById('generate-qr').addEventListener('click', () => this.generateQRCode());
-        document.getElementById('start-scan').addEventListener('click', () => this.startQRScanner());
     }
 
     // Take Attendance
@@ -481,138 +560,332 @@ class TeacherSystem {
             return;
         }
 
-        const qrData = {
+        // Generate a unique session ID
+        const sessionId = 'QR_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const timestamp = new Date().toISOString();
+        
+        // Create QR session data
+        const qrSessionData = {
+            sessionId: sessionId,
             class: className,
             subject: subject,
             teacher: this.currentTeacher.username,
-            timestamp: new Date().toISOString(),
+            timestamp: timestamp,
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes validity
             type: 'attendance'
         };
 
-        const qrString = JSON.stringify(qrData);
-        const container = document.getElementById('qr-code-container');
+        // Store active QR session in localStorage
+        const activeSessions = JSON.parse(localStorage.getItem('qr_active_sessions') || '{}');
+        activeSessions[sessionId] = qrSessionData;
+        localStorage.setItem('qr_active_sessions', JSON.stringify(activeSessions));
         
-        // Create a simple QR code pattern as a fallback
-        const createDummyQRCode = () => {
-            const size = 200;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            
-            // White background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, size, size);
-            
-            // Create a simple pattern that looks like a QR code
-            const cellSize = 10;
-            const data = [
-                [1,1,1,1,1,1,1,0,0,0,1,1,0,1,0,1,1,1,1,1],
-                [1,0,0,0,0,0,1,0,1,1,0,0,1,0,0,1,0,0,0,1],
-                [1,0,1,1,1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1],
-                [1,0,1,1,1,0,1,0,1,0,0,1,1,0,0,1,0,1,0,1],
-                [1,0,1,1,1,0,1,0,1,1,0,0,1,0,0,1,0,0,0,1],
-                [1,0,0,0,0,0,1,0,1,0,1,0,1,0,0,1,1,1,1,1],
-                [1,1,1,1,1,1,1,0,1,0,1,0,1,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0,1,1,0,1,1,0,1,1,0,1,0,1],
-                [1,1,0,1,0,0,1,1,1,0,0,1,0,1,1,1,0,0,1,1],
-                [1,0,1,1,0,1,0,1,0,0,1,0,0,1,0,0,1,0,1,0],
-                [0,1,1,0,0,1,1,0,1,0,1,0,1,1,0,1,0,1,1,0],
-                [0,1,0,1,0,0,1,1,1,1,0,1,0,0,1,1,0,1,0,1],
-                [1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,0,1,1,0,1],
-                [0,0,0,0,0,0,0,0,1,1,0,0,1,1,0,1,0,1,1,0],
-                [1,1,1,1,1,1,1,0,1,0,1,1,0,1,0,0,1,0,1,0],
-                [1,0,0,0,0,0,1,0,1,1,0,0,1,1,1,1,0,1,1,0],
-                [1,0,1,1,1,0,1,0,0,1,1,0,1,0,1,0,1,0,1,0],
-                [1,0,1,1,1,0,1,0,1,0,1,1,0,1,0,1,1,0,1,0],
-                [1,0,1,1,1,0,1,0,0,1,0,1,1,0,1,1,0,1,0,1],
-                [1,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,0,1,1,0]
-            ];
-            
-            // Draw the pattern
-            for (let y = 0; y < data.length; y++) {
-                for (let x = 0; x < data[y].length; x++) {
-                    if (data[y][x] === 1) {
-                        ctx.fillStyle = '#000000';
-                        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-                    }
-                }
-            }
-            
-            // Add some text
-            ctx.fillStyle = '#000000';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('SAMPLE QR CODE', size/2, size - 10);
-            
-            return canvas.toDataURL();
-        };
-        
-        // Display the QR code or fallback
-        container.innerHTML = `
-            <h4>QR Code for ${className} - ${subject}</h4>
-            <div style="margin: 20px 0; display: flex; justify-content: center;">
-                <img src="${createDummyQRCode()}" alt="QR Code" style="border: 1px solid #ccc; padding: 10px; background: white;">
-            </div>
-            <div style="background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                <strong>Scan this code with the student app:</strong><br>
-                <pre>${qrString}</pre>
-            </div>
-            <p><em>Note: This is a sample QR code for demonstration. In a real implementation, this would be a scannable QR code.</em></p>
-        `;
-    }
-
-    startQRScanner() {
-        const video = document.getElementById('qr-video');
-        
-        // In a real application, you would use a QR scanning library
-        // For this example, we'll simulate QR code scanning
-        alert('QR Scanner would activate here. In a real implementation, this would use the device camera to scan QR codes from student devices.');
-        
-        // Simulate a scanned QR code after 3 seconds
-        setTimeout(() => {
-            this.processScannedQR({
-                studentId: 'S001',
-                class: '10A',
-                subject: 'Mathematics',
-                timestamp: new Date().toISOString()
-            });
-        }, 3000);
-    }
-
-    processScannedQR(qrData) {
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Check if attendance already exists
-        const existingIndex = commonSystem.attendanceData.findIndex(record => 
-            record.studentId === qrData.studentId &&
-            record.class === qrData.class &&
-            record.subject === qrData.subject &&
-            record.date === today
-        );
-
-        const attendanceRecord = {
-            id: existingIndex !== -1 ? commonSystem.attendanceData[existingIndex].id : commonSystem.generateAttendanceId(),
-            studentId: qrData.studentId,
-            class: qrData.class,
-            subject: qrData.subject,
-            date: today,
-            status: 'present',
-            markedBy: this.currentTeacher.username,
-            markedAt: new Date().toISOString(),
-            method: 'qr'
-        };
-
-        if (existingIndex !== -1) {
-            commonSystem.attendanceData[existingIndex] = attendanceRecord;
-        } else {
-            commonSystem.attendanceData.push(attendanceRecord);
+        // Initialize attendance tracking for this session
+        const sessionAttendanceKey = `qr_attendance_${sessionId}`;
+        if (!localStorage.getItem(sessionAttendanceKey)) {
+            localStorage.setItem(sessionAttendanceKey, JSON.stringify([]));
         }
 
-        commonSystem.saveAttendanceData();
+        // Trigger storage event for real-time updates
+        localStorage.setItem('qr_session_updated', JSON.stringify({ sessionId, action: 'created' }));
+
+        // Create QR code string (JSON format for easy parsing)
+        const qrString = JSON.stringify({
+            sessionId: sessionId,
+            class: className,
+            subject: subject
+        });
+
+        const container = document.getElementById('qr-code-container');
         
-        const student = authSystem.users.find(u => u.studentId === qrData.studentId);
-        alert(`Attendance marked for ${student ? student.name : qrData.studentId}`);
+        // Clear previous QR code
+        container.innerHTML = '';
+        
+        // Create wrapper div for QR code
+        const qrCodeWrapper = document.createElement('div');
+        qrCodeWrapper.id = 'qrcode-display-' + sessionId;
+        qrCodeWrapper.style.cssText = 'margin: 20px 0; display: flex; justify-content: center;';
+        container.appendChild(qrCodeWrapper);
+        
+        // Generate QR code using QRCode library
+        this.generateQRCodeImage(qrCodeWrapper, qrString, className, subject);
+
+        // Display session info and real-time attendance list
+        const infoDiv = document.createElement('div');
+        infoDiv.innerHTML = `
+            <div style="background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <h4 style="margin-top: 0;">QR Code Session: ${className} - ${subject}</h4>
+                <p><strong>Session ID:</strong> ${sessionId}</p>
+                <p><strong>Valid until:</strong> ${new Date(qrSessionData.expiresAt).toLocaleString()}</p>
+                <p style="color: #2e7d32;"><strong>Display this QR code for students to scan</strong></p>
+            </div>
+            <div id="qr-attendance-list" style="margin-top: 20px;">
+                <h4>Attendance (Real-time)</h4>
+                <div id="qr-attendance-students" style="background: #f5f5f5; padding: 15px; border-radius: 5px; min-height: 100px;">
+                    <p style="color: #666;">Waiting for students to scan...</p>
+                </div>
+            </div>
+            <button id="stop-qr-session" class="btn-secondary" style="margin-top: 15px;">Stop Session</button>
+        `;
+        container.appendChild(infoDiv);
+
+        // Setup stop session button
+        document.getElementById('stop-qr-session').addEventListener('click', () => {
+            this.stopQRSession(sessionId);
+        });
+
+        // Start real-time monitoring for this session
+        this.startRealTimeMonitoring(sessionId);
+    }
+
+    startRealTimeMonitoring(sessionId) {
+        // Clear any existing interval
+        if (this.qrMonitoringInterval) {
+            clearInterval(this.qrMonitoringInterval);
+        }
+
+        // Store current session ID
+        this.currentMonitoringSessionId = sessionId;
+
+        // Update attendance list immediately
+        this.updateAttendanceList(sessionId);
+
+        // Set up interval to check for new attendance (for same-tab updates)
+        this.qrMonitoringInterval = setInterval(() => {
+            // Only update if we're still monitoring this session
+            if (this.currentMonitoringSessionId === sessionId) {
+                this.updateAttendanceList(sessionId);
+            }
+        }, 1000); // Check every second
+
+        // Listen to storage events for real-time updates across tabs
+        // Remove old listener if exists
+        if (this.storageEventListener) {
+            window.removeEventListener('storage', this.storageEventListener);
+        }
+        
+        this.storageEventListener = (e) => {
+            if (e.key === `qr_attendance_${sessionId}` || 
+                (e.key === 'qr_attendance_marked' && e.newValue)) {
+                try {
+                    const data = JSON.parse(e.newValue);
+                    if (data.sessionId === sessionId) {
+                        this.updateAttendanceList(sessionId);
+                    }
+                } catch (err) {
+                    // Just update anyway if parsing fails
+                    this.updateAttendanceList(sessionId);
+                }
+            }
+        };
+        
+        window.addEventListener('storage', this.storageEventListener);
+        
+        // Also listen for custom events (for same-tab updates)
+        if (this.customStorageListener) {
+            window.removeEventListener('qrAttendanceUpdated', this.customStorageListener);
+        }
+        
+        this.customStorageListener = (e) => {
+            if (e.detail && e.detail.sessionId === sessionId) {
+                this.updateAttendanceList(sessionId);
+            }
+        };
+        
+        window.addEventListener('qrAttendanceUpdated', this.customStorageListener);
+    }
+
+    updateAttendanceList(sessionId) {
+        const sessionAttendanceKey = `qr_attendance_${sessionId}`;
+        const attendanceList = JSON.parse(localStorage.getItem(sessionAttendanceKey) || '[]');
+        const container = document.getElementById('qr-attendance-students');
+
+        if (!container) return; // Container might not exist if session was stopped
+
+        if (attendanceList.length === 0) {
+            container.innerHTML = '<p style="color: #666;">Waiting for students to scan...</p>';
+            return;
+        }
+
+        let html = `<div style="display: grid; gap: 10px;">`;
+        attendanceList.forEach((record, index) => {
+            const student = authSystem.users.find(u => u.studentId === record.studentId || u.username === record.studentId);
+            const scanTime = new Date(record.timestamp).toLocaleTimeString();
+            html += `
+                <div style="background: white; padding: 10px; border-radius: 5px; border-left: 4px solid #4caf50; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${student ? student.name : record.studentId}</strong>
+                        ${student ? `<span style="color: #666; margin-left: 10px;">(${record.studentId})</span>` : ''}
+                    </div>
+                    <span style="color: #666; font-size: 0.9em;">${scanTime}</span>
+                </div>
+            `;
+        });
+        html += `</div>`;
+        html += `<p style="margin-top: 15px; font-weight: bold; color: #2e7d32;">Total: ${attendanceList.length} student(s) marked present</p>`;
+        
+        container.innerHTML = html;
+    }
+
+    stopQRSession(sessionId) {
+        // Clear monitoring interval
+        if (this.qrMonitoringInterval) {
+            clearInterval(this.qrMonitoringInterval);
+            this.qrMonitoringInterval = null;
+        }
+
+        // Clear session ID
+        this.currentMonitoringSessionId = null;
+
+        // Remove event listeners
+        if (this.storageEventListener) {
+            window.removeEventListener('storage', this.storageEventListener);
+            this.storageEventListener = null;
+        }
+        if (this.customStorageListener) {
+            window.removeEventListener('qrAttendanceUpdated', this.customStorageListener);
+            this.customStorageListener = null;
+        }
+
+        // Remove from active sessions
+        const activeSessions = JSON.parse(localStorage.getItem('qr_active_sessions') || '{}');
+        delete activeSessions[sessionId];
+        localStorage.setItem('qr_active_sessions', JSON.stringify(activeSessions));
+
+        // Clear the QR code container
+        document.getElementById('qr-code-container').innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">QR session stopped. Generate a new QR code to start a new session.</p>';
+        
+        alert('QR Session stopped. Attendance records have been saved.');
+    }
+
+    generateQRCodeImage(wrapper, qrString, className, subject) {
+        // Clear wrapper first
+        wrapper.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Generating QR code...</p>';
+        
+        // Use online API as primary method (most reliable)
+        const encodedText = encodeURIComponent(qrString);
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodedText}`;
+        
+        const img = document.createElement('img');
+        img.src = qrApiUrl;
+        img.alt = 'QR Code - Scan this with student app';
+        img.style.cssText = 'border: 3px solid #4caf50; padding: 15px; background: white; max-width: 100%; display: block; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);';
+        img.onload = () => {
+            wrapper.innerHTML = '';
+            wrapper.appendChild(img);
+            console.log('QR code generated successfully');
+        };
+        img.onerror = () => {
+            console.error('Online QR API failed, trying local library...');
+            // Fallback to local library
+            this.tryLocalQRCodeLibrary(wrapper, qrString, className, subject);
+        };
+        
+        // Set a timeout to show something even if image is slow to load
+        setTimeout(() => {
+            if (wrapper.querySelector('p')) {
+                // Still showing loading, try local library
+                wrapper.innerHTML = '';
+                wrapper.appendChild(img);
+            }
+        }, 1000);
+    }
+
+    tryLocalQRCodeLibrary(wrapper, qrString, className, subject) {
+        wrapper.innerHTML = '';
+        
+        // Check if QRCode library is available
+        if (typeof QRCode === 'undefined') {
+            console.error('QRCode library not available');
+            this.generateQRCodeFallback(wrapper.parentElement, qrString, className, subject);
+            return;
+        }
+        
+        try {
+            // Try using QRCode constructor
+            const qrDiv = document.createElement('div');
+            qrDiv.style.cssText = 'display: inline-block; text-align: center;';
+            wrapper.appendChild(qrDiv);
+            
+            new QRCode(qrDiv, {
+                text: qrString,
+                width: 400,
+                height: 400,
+                colorDark: '#000000',
+                colorLight: '#FFFFFF',
+                correctLevel: QRCode.CorrectLevel ? QRCode.CorrectLevel.H : 0
+            });
+            
+            // Style the generated QR code after a short delay
+            setTimeout(() => {
+                const qrImg = qrDiv.querySelector('img');
+                const qrCanvas = qrDiv.querySelector('canvas');
+                if (qrImg) {
+                    qrImg.style.cssText = 'border: 3px solid #4caf50; padding: 15px; background: white; max-width: 100%; display: block; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);';
+                    qrDiv.style.cssText = 'display: block; text-align: center;';
+                } else if (qrCanvas) {
+                    qrCanvas.style.cssText = 'border: 3px solid #4caf50; padding: 15px; background: white; max-width: 100%; display: block; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1);';
+                    qrDiv.style.cssText = 'display: block; text-align: center;';
+                } else {
+                    // If still no QR code, show fallback
+                    console.error('QRCode library did not generate image/canvas');
+                    this.generateQRCodeFallback(wrapper.parentElement, qrString, className, subject);
+                }
+            }, 300);
+            
+        } catch (e) {
+            console.error('QRCode constructor failed:', e);
+            this.generateQRCodeFallback(wrapper.parentElement, qrString, className, subject);
+        }
+    }
+
+    tryQRCodeConstructor(wrapper, qrString, className, subject) {
+        try {
+            // Clear wrapper
+            wrapper.innerHTML = '';
+            
+            // Try using constructor API
+            const qrDiv = document.createElement('div');
+            qrDiv.style.cssText = 'display: inline-block;';
+            wrapper.appendChild(qrDiv);
+            
+            new QRCode(qrDiv, {
+                text: qrString,
+                width: 300,
+                height: 300,
+                colorDark: '#000000',
+                colorLight: '#FFFFFF',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            // Style the generated QR code
+            setTimeout(() => {
+                const qrImg = qrDiv.querySelector('img');
+                const qrCanvas = qrDiv.querySelector('canvas');
+                if (qrImg) {
+                    qrImg.style.cssText = 'border: 1px solid #ccc; padding: 10px; background: white; max-width: 100%; display: block;';
+                } else if (qrCanvas) {
+                    qrCanvas.style.cssText = 'border: 1px solid #ccc; padding: 10px; background: white; max-width: 100%; display: block;';
+                }
+            }, 100);
+            
+        } catch (e) {
+            console.error('QRCode constructor failed:', e);
+            this.generateQRCodeFallback(wrapper.parentElement, qrString, className, subject);
+        }
+    }
+
+    generateQRCodeFallback(container, qrString, className, subject) {
+        container.innerHTML = `
+            <div style="background: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <h4>QR Code for ${className} - ${subject}</h4>
+                <p><strong>QR Code Data:</strong></p>
+                <div style="background: white; padding: 15px; border-radius: 5px; margin: 10px 0; font-family: monospace; word-break: break-all;">
+                    ${qrString}
+                </div>
+                <p style="color: #856404;">Note: Please use a QR code generator app or library to display this data as a scannable QR code.</p>
+            </div>
+        `;
     }
 }
 
