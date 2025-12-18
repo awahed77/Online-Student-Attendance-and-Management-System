@@ -6,24 +6,50 @@ class AuthSystem {
         this.init();
     }
 
+    // Get current user from session manager
+    getCurrentUser() {
+        if (!this.currentUser) {
+            this.currentUser = sessionManager.getCurrentUser();
+        }
+        return this.currentUser;
+    }
+
     init() {
         this.setupLoginForm();
         this.checkExistingSession();
     }
 
     loadUsers() {
-        const defaultUsers = [
-            { id: 1, username: 'admin', password: 'admin123', role: 'admin', name: 'System Administrator' },
-            { id: 2, username: 'teacher1', password: 'teacher123', role: 'teacher', name: 'John Smith' },
-            { id: 3, username: 'student1', password: 'student123', role: 'student', name: 'Alice Johnson', studentId: 'S001' }
-        ];
-        
-        const storedUsers = localStorage.getItem('attendance_users');
-        return storedUsers ? JSON.parse(storedUsers) : defaultUsers;
+        try {
+            const defaultUsers = [
+                { id: 1, username: 'admin', password: 'admin123', role: 'admin', name: 'System Administrator' },
+                { id: 2, username: 'teacher1', password: 'teacher123', role: 'teacher', name: 'John Smith' },
+                { id: 3, username: 'student1', password: 'student123', role: 'student', name: 'Alice Johnson', studentId: 'S001' }
+            ];
+            
+            const storedUsers = localStorage.getItem('attendance_users');
+            if (storedUsers) {
+                const parsed = JSON.parse(storedUsers);
+                return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultUsers;
+            }
+            return defaultUsers;
+        } catch (error) {
+            console.error('Error loading users:', error);
+            return [
+                { id: 1, username: 'admin', password: 'admin123', role: 'admin', name: 'System Administrator' },
+                { id: 2, username: 'teacher1', password: 'teacher123', role: 'teacher', name: 'John Smith' },
+                { id: 3, username: 'student1', password: 'student123', role: 'student', name: 'Alice Johnson', studentId: 'S001' }
+            ];
+        }
     }
 
     saveUsers() {
-        localStorage.setItem('attendance_users', JSON.stringify(this.users));
+        try {
+            localStorage.setItem('attendance_users', JSON.stringify(this.users));
+        } catch (error) {
+            console.error('Error saving users:', error);
+            alert('Error saving user data. Please try again.');
+        }
     }
 
     setupLoginForm() {
@@ -47,7 +73,7 @@ class AuthSystem {
         );
 
         if (user) {
-            this.currentUser = user;
+            // Create session using session manager
             this.createSession(user);
             this.redirectToDashboard(user.role);
             this.showMessage('Login successful!', 'success', messageDiv);
@@ -57,20 +83,17 @@ class AuthSystem {
     }
 
     createSession(user) {
-        const session = {
-            userId: user.id,
-            username: user.username,
-            role: user.role,
-            loginTime: new Date().toISOString()
-        };
-        localStorage.setItem('current_session', JSON.stringify(session));
+        // Use session manager for multi-session support
+        const session = sessionManager.createSession(user);
+        this.currentUser = user;
+        return session;
     }
 
     checkExistingSession() {
-        const session = localStorage.getItem('current_session');
+        // Check for existing session using session manager
+        const session = sessionManager.getCurrentSession();
         if (session) {
-            const sessionData = JSON.parse(session);
-            const user = this.users.find(u => u.id === sessionData.userId);
+            const user = this.users.find(u => u.id === session.userId);
             if (user) {
                 this.currentUser = user;
                 this.redirectToDashboard(user.role);
@@ -107,8 +130,9 @@ class AuthSystem {
     }
 
     logout() {
+        // Use session manager to logout
+        sessionManager.logout();
         this.currentUser = null;
-        localStorage.removeItem('current_session');
         
         // Hide all dashboards and show login
         document.querySelectorAll('.section').forEach(section => {

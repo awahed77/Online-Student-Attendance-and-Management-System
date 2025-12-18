@@ -1,7 +1,10 @@
 // Student System
 class StudentSystem {
     constructor() {
-        this.currentStudent = authSystem.currentUser;
+        this.currentStudent = authSystem.getCurrentUser();
+        this.attendanceChart = null;
+        this.html5QrCode = null;
+        this.currentLocation = null;
         this.init();
     }
 
@@ -17,6 +20,21 @@ class StudentSystem {
             button.addEventListener('click', (e) => {
                 const target = e.target.getAttribute('data-target');
                 this.showSection(target);
+                
+                // Load section-specific data when switching
+                if (target === 'attendance-stats') {
+                    // Small delay to ensure section is visible
+                    setTimeout(() => this.loadAttendanceChart(), 100);
+                } else if (target === 'notifications') {
+                    this.loadNotifications();
+                } else if (target === 'my-attendance') {
+                    this.loadStudentData();
+                } else if (target === 'scan-qr') {
+                    // Update location status when opening QR scanner
+                    if ('geolocation' in navigator) {
+                        this.updateLocationStatus();
+                    }
+                }
             });
         });
     }
@@ -35,29 +53,26 @@ class StudentSystem {
     }
 
     setupEventListeners() {
-        // Load data when switching to specific sections
-        document.querySelector('[data-target="attendance-stats"]').addEventListener('click', () => {
-            this.loadAttendanceChart();
-        });
+        // QR Code Scanner buttons
+        const startQrBtn = document.getElementById('start-qr-scanner');
+        const stopQrBtn = document.getElementById('stop-qr-scanner');
         
-        document.querySelector('[data-target="notifications"]').addEventListener('click', () => {
-            this.loadNotifications();
-        });
-
-        // QR Code Scanner
-        document.getElementById('start-qr-scanner').addEventListener('click', () => this.startQRScanner());
-        document.getElementById('stop-qr-scanner').addEventListener('click', () => this.stopQRScanner());
+        if (startQrBtn) {
+            startQrBtn.addEventListener('click', () => this.startQRScanner());
+        }
         
-        // Image Upload Scanner
-        document.getElementById('camera-scan-btn').addEventListener('click', () => this.showCameraScanner());
-        document.getElementById('upload-scan-btn').addEventListener('click', () => this.showUploadScanner());
-        document.getElementById('qr-image-upload').addEventListener('change', (e) => this.handleImageUpload(e));
-        document.getElementById('process-uploaded-image').addEventListener('click', () => this.processUploadedImage());
+        if (stopQrBtn) {
+            stopQrBtn.addEventListener('click', () => this.stopQRScanner());
+        }
         
-        // Initialize location status
+        // Check for geolocation support
         const locationText = document.getElementById('location-text');
         if (locationText) {
-            locationText.textContent = 'Ready to scan QR code';
+            if ('geolocation' in navigator) {
+                this.updateLocationStatus();
+            } else {
+                locationText.textContent = 'Geolocation is not supported by your browser';
+            }
         }
     }
 
@@ -68,19 +83,27 @@ class StudentSystem {
     }
 
     loadAttendanceSummary() {
-        const percentage = commonSystem.calculateAttendancePercentage(this.currentStudent.studentId);
-        document.getElementById('attendance-percentage').textContent = `${percentage}%`;
+        // Reload data before calculating
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
         
-        // Color code based on threshold
+        const percentage = commonSystem.calculateAttendancePercentage(this.currentStudent.studentId);
         const percentageElement = document.getElementById('attendance-percentage');
-        if (percentage < commonSystem.settings.attendanceThreshold) {
-            percentageElement.style.color = '#e74c3c';
-        } else {
-            percentageElement.style.color = '#2ecc71';
+        if (percentageElement) {
+            percentageElement.textContent = `${percentage}%`;
+            
+            // Color code based on threshold
+            if (percentage < commonSystem.settings.attendanceThreshold) {
+                percentageElement.style.color = '#e74c3c';
+            } else {
+                percentageElement.style.color = '#2ecc71';
+            }
         }
     }
 
     loadAttendanceRecords() {
+        // Reload data before displaying
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        
         const studentRecords = commonSystem.attendanceData.filter(record => 
             record.studentId === this.currentStudent.studentId
         );
@@ -99,6 +122,7 @@ class StudentSystem {
                         <th>Date</th>
                         <th>Class</th>
                         <th>Subject</th>
+                        <th>Period</th>
                         <th>Status</th>
                         <th>Marked By</th>
                     </tr>
@@ -115,6 +139,7 @@ class StudentSystem {
                     <td>${commonSystem.formatDate(record.date)}</td>
                     <td>${record.class}</td>
                     <td>${record.subject}</td>
+                    <td>${record.period || 'N/A'}</td>
                     <td>
                         <span class="status-${record.status}">
                             ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
@@ -130,7 +155,21 @@ class StudentSystem {
     }
 
     loadAttendanceChart() {
-        const ctx = document.getElementById('attendance-chart').getContext('2d');
+        // Reload data before generating chart
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        
+        const canvas = document.getElementById('attendance-chart');
+        if (!canvas) {
+            console.error('Chart canvas not found');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (this.attendanceChart) {
+            this.attendanceChart.destroy();
+        }
+        
+        const ctx = canvas.getContext('2d');
         const studentRecords = commonSystem.attendanceData.filter(record => 
             record.studentId === this.currentStudent.studentId
         );
@@ -140,15 +179,53 @@ class StudentSystem {
         commonSystem.subjects.forEach(subject => {
             const subjectRecords = studentRecords.filter(record => record.subject === subject);
             if (subjectRecords.length > 0) {
-                const presentCount = subjectRecords.filter(record => record.status === 'present').length;
-                subjectStats[subject] = Math.round((presentCount / subjectRecords.length) * 100);
+                const presentCount = subjectRecords.filter(record => 
+                    record.status === 'present' || record.status === 'late'
+                ).length;
+                const percentage = Math.round((presentCount / subjectRecords.length) * 100);
+                subjectStats[subject] = percentage;
             }
         });
 
         const subjects = Object.keys(subjectStats);
         const percentages = Object.values(subjectStats);
 
-        new Chart(ctx, {
+        // Check if Chart.js is available
+        if (typeof Chart === 'undefined') {
+            const container = canvas.parentElement;
+            container.innerHTML = '<p style="text-align: center; padding: 20px; color: red;">Chart.js library not loaded. Please refresh the page.</p>';
+            return;
+        }
+
+        // If no data, show message
+        if (subjects.length === 0) {
+            // Destroy any existing chart
+            if (this.attendanceChart) {
+                this.attendanceChart.destroy();
+                this.attendanceChart = null;
+            }
+            // Show message
+            const container = canvas.parentElement;
+            const existingMsg = container.querySelector('.no-chart-data');
+            if (!existingMsg) {
+                const msg = document.createElement('p');
+                msg.className = 'no-chart-data';
+                msg.style.cssText = 'text-align: center; padding: 20px; color: #7f8c8d; margin-top: 20px;';
+                msg.textContent = 'No attendance data available to display in chart.';
+                container.appendChild(msg);
+            }
+            canvas.style.display = 'none';
+            return;
+        } else {
+            // Remove no data message if it exists
+            const existingMsg = canvas.parentElement.querySelector('.no-chart-data');
+            if (existingMsg) {
+                existingMsg.remove();
+            }
+            canvas.style.display = 'block';
+        }
+
+        this.attendanceChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: subjects,
@@ -164,6 +241,7 @@ class StudentSystem {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: true,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -191,17 +269,66 @@ class StudentSystem {
                             }
                         }
                     }
+                },
+                animation: {
+                    duration: 1000
                 }
             }
         });
     }
 
     // QR Code Scanner Methods
+    async updateLocationStatus() {
+        const locationText = document.getElementById('location-text');
+        locationText.textContent = 'Getting location...';
+        
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            });
+            
+            this.currentLocation = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            };
+            
+            locationText.textContent = `Location acquired (Accuracy: ${Math.round(this.currentLocation.accuracy)}m)`;
+            return true;
+        } catch (error) {
+            console.error('Error getting location:', error);
+            locationText.textContent = 'Error getting location. Please ensure location services are enabled.';
+            return false;
+        }
+    }
+
     async startQRScanner() {
+        // Check if Html5Qrcode is available
+        if (typeof Html5Qrcode === 'undefined') {
+            alert('QR Scanner library not loaded. Please refresh the page and try again.');
+            return;
+        }
+
         const startBtn = document.getElementById('start-qr-scanner');
         const stopBtn = document.getElementById('stop-qr-scanner');
         const qrReader = document.getElementById('qr-reader');
         const locationText = document.getElementById('location-text');
+        
+        if (!startBtn || !stopBtn || !qrReader) {
+            alert('QR scanner elements not found. Please refresh the page.');
+            return;
+        }
+        
+        // Try to get location (but don't block if it fails)
+        const hasLocation = await this.updateLocationStatus();
+        if (!hasLocation) {
+            locationText.textContent = 'Warning: Location not available. QR scanning may still work.';
+            locationText.style.color = '#f39c12';
+        }
         
         // Clear previous scanner if any
         if (this.html5QrCode) {
@@ -212,29 +339,28 @@ class StudentSystem {
             }
         }
         
-        // Clear reader container
+        // Clear the reader div
         qrReader.innerHTML = '';
         
         // Initialize scanner
-        this.html5QrCode = new Html5Qrcode("qr-reader");
-        
-        // Start scanning
         try {
+            this.html5QrCode = new Html5Qrcode("qr-reader");
+            
+            // Start scanning
             await this.html5QrCode.start(
                 { facingMode: "environment" },
                 {
                     fps: 10,
-                    qrbox: { width: 250, height: 250 }
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
                 },
                 (decodedText, decodedResult) => {
-                    // Handle the scanned code
+                    // Handle the scanned code (this callback handles successful scans)
                     this.handleScannedCode(decodedText);
                 },
                 (errorMessage) => {
-                    // Ignore common scanning errors
-                    if (!errorMessage.includes('No QR code found') && !errorMessage.includes('NotFoundException')) {
-                        console.log('Scanning...', errorMessage);
-                    }
+                    // Error callback - ignore common "not found" errors
+                    // This runs continuously while scanning
                 }
             );
             
@@ -242,295 +368,219 @@ class StudentSystem {
             startBtn.style.display = 'none';
             stopBtn.style.display = 'block';
             qrReader.style.display = 'block';
-            locationText.textContent = 'Scanner active - Point camera at QR code';
+            
+            // Show success message
+            const resultsDiv = document.getElementById('qr-reader-results');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = '<p style="color: #2ecc71; text-align: center;">Scanner is active. Point camera at QR code.</p>';
+            }
             
         } catch (error) {
             console.error('Error starting QR scanner:', error);
-            const errorMsg = error.message || 'Failed to start QR scanner';
-            if (errorMsg.includes('Permission denied') || errorMsg.includes('NotAllowedError')) {
-                locationText.textContent = 'Camera permission denied. Please allow camera access.';
+            let errorMsg = 'Failed to start QR scanner. ';
+            if (error.message.includes('Permission denied')) {
+                errorMsg += 'Please allow camera access and try again.';
+            } else if (error.message.includes('not found')) {
+                errorMsg += 'Camera not found. Please check your device.';
             } else {
-                locationText.textContent = 'Error: ' + errorMsg;
+                errorMsg += 'Please try again or refresh the page.';
             }
-            this.showScanMessage('Failed to start QR scanner. Please check camera permissions.', 'error');
+            alert(errorMsg);
+            
+            // Reset UI
+            startBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
         }
     }
     
     stopQRScanner() {
         if (this.html5QrCode) {
-            this.html5QrCode.stop().then(() => {
+            this.html5QrCode.stop().then(ignore => {
+                // QR Code scanning is stopped
                 const startBtn = document.getElementById('start-qr-scanner');
                 const stopBtn = document.getElementById('stop-qr-scanner');
-                const locationText = document.getElementById('location-text');
-                
-                startBtn.style.display = 'block';
-                stopBtn.style.display = 'none';
-                locationText.textContent = 'Scanner stopped';
-                
-                // Clear the scanner view
                 const qrReader = document.getElementById('qr-reader');
-                if (qrReader) {
-                    qrReader.innerHTML = '';
-                }
+                const resultsDiv = document.getElementById('qr-reader-results');
+                
+                if (startBtn) startBtn.style.display = 'block';
+                if (stopBtn) stopBtn.style.display = 'none';
+                if (qrReader) qrReader.innerHTML = '';
+                if (resultsDiv) resultsDiv.innerHTML = '';
+                
+                // Clear the scanner instance
+                this.html5QrCode = null;
             }).catch(err => {
                 console.error('Error stopping QR scanner:', err);
+                // Force clear even if stop fails
+                const startBtn = document.getElementById('start-qr-scanner');
+                const stopBtn = document.getElementById('stop-qr-scanner');
+                const qrReader = document.getElementById('qr-reader');
+                
+                if (startBtn) startBtn.style.display = 'block';
+                if (stopBtn) stopBtn.style.display = 'none';
+                if (qrReader) qrReader.innerHTML = '';
+                this.html5QrCode = null;
             });
-        }
-    }
-    
-    showScanMessage(message, type = 'info') {
-        const resultsDiv = document.getElementById('qr-reader-results');
-        if (!resultsDiv) return;
-        
-        const color = type === 'error' ? '#e74c3c' : type === 'success' ? '#2ecc71' : '#3498db';
-        resultsDiv.innerHTML = `<div style="padding: 15px; background: ${color}15; border-left: 4px solid ${color}; border-radius: 5px; margin: 15px 0; color: ${color}; font-weight: bold;">${message}</div>`;
-        
-        if (type === 'success') {
-            setTimeout(() => {
-                resultsDiv.innerHTML = '';
-            }, 5000);
-        }
-    }
-    
-    showCameraScanner() {
-        document.getElementById('camera-scanner-section').style.display = 'block';
-        document.getElementById('upload-scanner-section').style.display = 'none';
-        document.getElementById('camera-scan-btn').classList.add('active');
-        document.getElementById('upload-scan-btn').classList.remove('active');
-    }
-
-    showUploadScanner() {
-        document.getElementById('camera-scanner-section').style.display = 'none';
-        document.getElementById('upload-scanner-section').style.display = 'block';
-        document.getElementById('upload-scan-btn').classList.add('active');
-        document.getElementById('camera-scan-btn').classList.remove('active');
-        
-        // Stop camera if running
-        if (this.html5QrCode) {
-            this.stopQRScanner();
-        }
-    }
-
-    handleImageUpload(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const preview = document.getElementById('uploaded-image-preview');
-        const processBtn = document.getElementById('process-uploaded-image');
-        
-        // Show preview
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            preview.innerHTML = `
-                <img src="${e.target.result}" alt="QR Code Preview" style="max-width: 300px; max-height: 300px; border: 2px solid #4caf50; border-radius: 5px;">
-            `;
-            processBtn.style.display = 'block';
-            this.uploadedImageFile = file;
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async processUploadedImage() {
-        if (!this.uploadedImageFile) {
-            this.showScanMessage('Please select an image first.', 'error');
-            return;
-        }
-
-        this.showScanMessage('Processing QR code image...', 'info');
-
-        try {
-            // Use Html5Qrcode to scan from file
-            if (!this.html5QrCode) {
-                this.html5QrCode = new Html5Qrcode("qr-reader");
-            }
-
-            const decodedText = await this.html5QrCode.scanFile(this.uploadedImageFile, true);
+        } else {
+            // If scanner wasn't initialized, just reset UI
+            const startBtn = document.getElementById('start-qr-scanner');
+            const stopBtn = document.getElementById('stop-qr-scanner');
+            const qrReader = document.getElementById('qr-reader');
             
-            if (decodedText) {
-                this.handleScannedCode(decodedText);
-            } else {
-                this.showScanMessage('Could not read QR code from image. Please try another image.', 'error');
-            }
-        } catch (error) {
-            console.error('Error processing image:', error);
-            this.showScanMessage('Failed to process QR code image. Please ensure the image contains a valid QR code.', 'error');
+            if (startBtn) startBtn.style.display = 'block';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (qrReader) qrReader.innerHTML = '';
         }
     }
-
+    
     async handleScannedCode(decodedText) {
         try {
-            console.log('Scanned QR code:', decodedText);
+            // Stop the scanner after successful scan
+            this.stopQRScanner();
             
             // Parse the QR code data (JSON format)
             let qrData;
             try {
                 qrData = JSON.parse(decodedText);
             } catch (e) {
-                // Try parsing as URL-encoded or plain text format
-                if (decodedText.includes('sessionId')) {
-                    // Try to extract JSON from text
-                    const jsonMatch = decodedText.match(/\{.*\}/);
-                    if (jsonMatch) {
-                        qrData = JSON.parse(jsonMatch[0]);
-                    } else {
-                        throw new Error('Invalid QR code format - not valid JSON');
-                    }
-                } else {
-                    throw new Error('Invalid QR code format');
-                }
-            }
-            
-            const { sessionId, class: className, subject } = qrData;
-            
-            if (!sessionId || !className || !subject) {
-                this.showScanMessage('Invalid QR code format. Please scan a valid attendance QR code.', 'error');
-                console.error('Missing required fields:', { sessionId, className, subject });
+                alert('Invalid QR code format. Please scan a valid attendance QR code.');
                 return;
             }
             
-            console.log('QR Code data:', { sessionId, className, subject });
-            
-            // Check if session is valid and not expired
-            const activeSessions = JSON.parse(localStorage.getItem('qr_active_sessions') || '{}');
-            console.log('Active sessions:', activeSessions);
-            console.log('Looking for sessionId:', sessionId);
-            
-            const session = activeSessions[sessionId];
-            
-            if (!session) {
-                console.error('Session not found. Available sessions:', Object.keys(activeSessions));
-                this.showScanMessage('QR code session not found or expired. Please ask your teacher for a new QR code.', 'error');
+            // Validate QR code has token
+            if (!qrData.token) {
+                alert('Invalid QR code. Missing security token.');
                 return;
             }
             
-            console.log('Found session:', session);
-            
-            // Check if session expired
-            const now = new Date();
-            const expiresAt = new Date(session.expiresAt);
-            if (now > expiresAt) {
-                this.showScanMessage('QR code has expired. Please ask your teacher for a new one.', 'error');
-                return;
-            }
-            
-            // Check if student is in the correct class (warning only, don't block)
-            if (this.currentStudent.class && this.currentStudent.class !== className) {
-                console.warn(`Class mismatch: student is in ${this.currentStudent.class}, QR is for ${className}`);
-                // Allow attendance marking but log a warning
-            }
-            
-            // Get session attendance list
-            const sessionAttendanceKey = `qr_attendance_${sessionId}`;
-            let attendanceList = JSON.parse(localStorage.getItem(sessionAttendanceKey) || '[]');
-            
-            // Check if already marked
-            const studentId = this.currentStudent.studentId || this.currentStudent.username;
-            const alreadyMarked = attendanceList.some(record => 
-                record.studentId === studentId || 
-                record.studentId === this.currentStudent.studentId ||
-                record.studentId === this.currentStudent.username
+            // Validate and use QR token using QR session manager
+            const validation = qrSessionManager.validateAndUseQRToken(
+                qrData.token,
+                this.currentStudent.studentId
             );
             
-            if (alreadyMarked) {
-                this.showScanMessage('You have already marked your attendance for this session!', 'error');
+            if (!validation.valid) {
+                alert(validation.error || 'QR code is invalid or expired.');
                 return;
             }
             
-            // Add attendance record to session
-            const attendanceRecord = {
-                studentId: studentId,
-                studentName: this.currentStudent.name,
-                timestamp: new Date().toISOString()
-            };
-            
-            attendanceList.push(attendanceRecord);
-            localStorage.setItem(sessionAttendanceKey, JSON.stringify(attendanceList));
-            
-            // Also save to main attendance data
+            const session = validation.session;
             const today = new Date().toISOString().split('T')[0];
+            
+            // Check if already marked (double-check)
             const existingIndex = commonSystem.attendanceData.findIndex(record => 
-                (record.studentId === studentId || 
-                 record.studentId === this.currentStudent.studentId ||
-                 record.studentId === this.currentStudent.username) &&
-                record.class === className &&
-                record.subject === subject &&
+                record.studentId === this.currentStudent.studentId &&
+                record.class === session.class &&
+                record.subject === session.subject &&
+                record.period === session.period &&
                 record.date === today
             );
             
-            const mainAttendanceRecord = {
-                id: existingIndex !== -1 ? commonSystem.attendanceData[existingIndex].id : commonSystem.generateAttendanceId(),
-                studentId: studentId,
-                class: className,
-                subject: subject,
-                date: today,
-                status: 'present',
-                markedBy: session.teacher,
-                markedAt: new Date().toISOString(),
-                method: 'qr',
-                sessionId: sessionId
-            };
-            
             if (existingIndex !== -1) {
-                commonSystem.attendanceData[existingIndex] = mainAttendanceRecord;
-            } else {
-                commonSystem.attendanceData.push(mainAttendanceRecord);
+                alert('You have already marked attendance for this class period today!');
+                return;
             }
             
+            // Mark attendance
+            const attendanceRecord = {
+                id: commonSystem.generateAttendanceId(),
+                studentId: this.currentStudent.studentId,
+                class: session.class,
+                subject: session.subject,
+                period: session.period,
+                date: today,
+                status: 'present',
+                markedBy: session.teacherUsername,
+                markedAt: new Date().toISOString(),
+                method: 'qr',
+                location: this.currentLocation || null,
+                qrToken: qrData.token // Store token for audit
+            };
+            
+            // Reload attendance data before saving
+            commonSystem.attendanceData = commonSystem.loadAttendanceData();
+            
+            // Save attendance
+            commonSystem.attendanceData.push(attendanceRecord);
             commonSystem.saveAttendanceData();
             
-            // Trigger storage event for real-time updates (works across tabs)
-            localStorage.setItem('qr_attendance_marked', JSON.stringify({ 
-                sessionId, 
-                studentId,
-                timestamp: new Date().toISOString()
-            }));
+            // Reload from localStorage to ensure sync
+            commonSystem.attendanceData = commonSystem.loadAttendanceData();
             
-            // Also trigger custom event for same-tab updates
-            window.dispatchEvent(new CustomEvent('qrAttendanceUpdated', {
-                detail: { sessionId, studentId, timestamp: new Date().toISOString() }
-            }));
-            
-            // Stop scanner and show success
-            this.stopQRScanner();
-            this.showScanMessage('✓ Attendance marked successfully!', 'success');
-            
-            // Clear upload preview if exists
-            const uploadPreview = document.getElementById('uploaded-image-preview');
-            const uploadInput = document.getElementById('qr-image-upload');
-            const processBtn = document.getElementById('process-uploaded-image');
-            if (uploadPreview) uploadPreview.innerHTML = '';
-            if (uploadInput) uploadInput.value = '';
-            if (processBtn) processBtn.style.display = 'none';
-            this.uploadedImageFile = null;
-            
-            // Refresh attendance data
-            this.loadAttendanceSummary();
-            this.loadAttendanceRecords();
-            
-            // Check for notifications
+            // Check notifications
             commonSystem.checkLowAttendanceNotifications();
+            
+            // Show success message
+            alert(`Attendance marked successfully!\n${session.subject} - ${session.class} - ${session.period}`);
+            
+            // Reload all student data in real-time
+            this.loadStudentData();
+            
+            // Refresh chart if statistics section is active
+            const statsSection = document.getElementById('attendance-stats');
+            if (statsSection && statsSection.classList.contains('active')) {
+                this.loadAttendanceChart();
+            }
+            
+            // Refresh notifications if notifications section is active
+            const notifSection = document.getElementById('notifications');
+            if (notifSection && notifSection.classList.contains('active')) {
+                this.loadNotifications();
+            }
             
         } catch (error) {
             console.error('Error processing QR code:', error);
-            this.showScanMessage('Invalid QR code. Please try scanning again.', 'error');
+            alert('Error processing QR code. Please try again.');
         }
+    }
+    
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        // Haversine formula to calculate distance between two points on Earth
+        const R = 6371e3; // Earth's radius in meters
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // Distance in meters
     }
 
     loadNotifications() {
+        // Refresh notifications first
+        commonSystem.checkLowAttendanceNotifications();
+        
         const notifications = commonSystem.getStudentNotifications(this.currentStudent.studentId);
         const container = document.getElementById('notifications-list');
         
-        if (notifications.length === 0) {
-            container.innerHTML = '<p>No notifications.</p>';
+        if (!container) {
+            console.error('Notifications container not found');
+            return;
+        }
+        
+        // Sort notifications by date (newest first)
+        const sortedNotifications = [...notifications].sort((a, b) => 
+            new Date(b.date) - new Date(a.date)
+        );
+        
+        if (sortedNotifications.length === 0) {
+            container.innerHTML = '<p style="text-align: center; padding: 20px; color: #7f8c8d;">No notifications at this time.</p>';
             return;
         }
 
         let html = '';
-        notifications.forEach(notification => {
+        sortedNotifications.forEach(notification => {
+            const date = new Date(notification.date);
+            const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
             html += `
-                <div class="notification-item ${notification.type}">
+                <div class="notification-item ${notification.type || 'info'}">
                     <div class="notification-message">${notification.message}</div>
-                    <div class="notification-date">${commonSystem.formatDate(notification.date)}</div>
+                    <div class="notification-date">${dateStr}</div>
                 </div>
             `;
         });
@@ -565,6 +615,23 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Helper function to reload student data (can be called from other modules)
+window.refreshStudentData = function() {
+    if (typeof studentSystem !== 'undefined' && studentSystem) {
+        studentSystem.loadStudentData();
+        // If statistics section is active, refresh chart
+        const statsSection = document.getElementById('attendance-stats');
+        if (statsSection && statsSection.classList.contains('active')) {
+            studentSystem.loadAttendanceChart();
+        }
+        // If notifications section is active, refresh notifications
+        const notifSection = document.getElementById('notifications');
+        if (notifSection && notifSection.classList.contains('active')) {
+            studentSystem.loadNotifications();
+        }
+    }
+};
 
 // Initialize student system
 const studentSystem = new StudentSystem();

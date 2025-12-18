@@ -56,6 +56,11 @@ class AdminSystem {
 
     // Student Management
     loadStudentManagement() {
+        // Reload users from localStorage
+        authSystem.users = authSystem.loadUsers();
+        // Reload attendance data
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        
         const students = authSystem.users.filter(user => user.role === 'student');
         const container = document.getElementById('students-list');
         
@@ -207,6 +212,9 @@ class AdminSystem {
 
     // User Management
     loadUserManagement() {
+        // Reload users from localStorage
+        authSystem.users = authSystem.loadUsers();
+        
         const users = authSystem.users;
         const container = document.getElementById('users-list');
         
@@ -398,6 +406,9 @@ class AdminSystem {
     }
 
     generateReport() {
+        // Reload attendance data from localStorage
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        
         const className = document.getElementById('report-class-filter').value;
         const month = document.getElementById('report-month-filter').value;
         

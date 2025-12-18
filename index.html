@@ -108,6 +108,7 @@
         <div class="dashboard-content">
             <div class="sidebar">
                 <button class="nav-btn active" data-target="take-attendance">Take Attendance</button>
+                <button class="nav-btn" data-target="schedule-classes">Schedule Classes</button>
                 <button class="nav-btn" data-target="view-attendance">View Records</button>
                 <button class="nav-btn" data-target="teacher-reports">Reports</button>
                 <button class="nav-btn" data-target="qr-attendance">QR Attendance</button>
@@ -124,6 +125,16 @@
                         <select id="subject-select">
                             <option value="">Select Subject</option>
                         </select>
+                        <select id="period-select">
+                            <option value="">Select Period</option>
+                            <option value="Period 1">Period 1</option>
+                            <option value="Period 2">Period 2</option>
+                            <option value="Period 3">Period 3</option>
+                            <option value="Period 4">Period 4</option>
+                            <option value="Period 5">Period 5</option>
+                            <option value="Period 6">Period 6</option>
+                        </select>
+                        <input type="date" id="attendance-date" value="">
                         <button id="load-students-btn" class="btn-primary">Load Students</button>
                     </div>
                     <div id="attendance-form-container"></div>
@@ -132,6 +143,15 @@
                         <input type="file" id="import-file" accept=".csv,.xlsx">
                         <button id="import-btn" class="btn-secondary">Import</button>
                     </div>
+                </div>
+                
+                <!-- Schedule Classes -->
+                <div id="schedule-classes" class="content-section">
+                    <h2>Schedule Classes</h2>
+                    <div class="action-bar">
+                        <button id="add-schedule-btn" class="btn-primary">Add Class Schedule</button>
+                    </div>
+                    <div id="schedules-list" class="data-table-container"></div>
                 </div>
                 
                 <!-- View Attendance Records -->
@@ -220,39 +240,20 @@
                 <div id="scan-qr" class="content-section">
                     <h2>Scan QR Code for Attendance</h2>
                     <div class="qr-scan-container">
-                        <div style="margin-bottom: 20px; text-align: center;">
-                            <button id="camera-scan-btn" class="btn-primary" style="margin: 5px;">Scan with Camera</button>
-                            <button id="upload-scan-btn" class="btn-secondary" style="margin: 5px;">Upload QR Image</button>
-                        </div>
-                        
-                        <!-- Camera Scanner -->
-                        <div id="camera-scanner-section">
-                            <div id="qr-reader" style="width: 100%; max-width: 500px; margin: 20px auto; display: none;"></div>
-                            <div id="location-status" style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
-                                <strong>Scanner Status:</strong> <span id="location-text">Ready to scan QR code</span>
-                            </div>
-                            <button id="start-qr-scanner" class="btn-primary" style="display: block; margin: 20px auto;">Start QR Scanner</button>
-                            <button id="stop-qr-scanner" class="btn-secondary" style="display: none; margin: 20px auto;">Stop Scanner</button>
-                        </div>
-                        
-                        <!-- Image Upload Scanner -->
-                        <div id="upload-scanner-section" style="display: none;">
-                            <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; border: 2px dashed #ccc; text-align: center;">
-                                <p style="margin-bottom: 15px;"><strong>Upload QR Code Image</strong></p>
-                                <input type="file" id="qr-image-upload" accept="image/*" style="margin: 10px 0;">
-                                <div id="uploaded-image-preview" style="margin: 20px 0;"></div>
-                                <button id="process-uploaded-image" class="btn-primary" style="display: none;">Process QR Code</button>
-                            </div>
-                        </div>
-                        
+                        <div id="qr-reader" style="width: 100%; max-width: 500px; margin: 20px auto;"></div>
                         <div id="qr-reader-results"></div>
+                        <div id="location-status" style="margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+                            <strong>Location Status:</strong> <span id="location-text">Requesting location...</span>
+                        </div>
+                        <button id="start-qr-scanner" class="btn-primary" style="display: block; margin: 20px auto;">Start QR Scanner</button>
+                        <button id="stop-qr-scanner" class="btn-secondary" style="display: none; margin: 20px auto;">Stop Scanner</button>
                     </div>
                 </div>
                 
                 <!-- Attendance Statistics -->
                 <div id="attendance-stats" class="content-section">
                     <h2>Attendance Statistics</h2>
-                    <div class="stats-container">
+                    <div class="stats-container" style="padding: 20px;">
                         <canvas id="attendance-chart" width="400" height="200"></canvas>
                     </div>
                 </div>
@@ -286,6 +287,8 @@
     <!-- Excel/CSV Import Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
+    <script src="js/sessionManager.js"></script>
+    <script src="js/qrSessionManager.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/common.js"></script>
     <script src="js/admin.js"></script>
