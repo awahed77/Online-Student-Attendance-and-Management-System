@@ -17,6 +17,50 @@ class AuthSystem {
     init() {
         this.setupLoginForm();
         this.checkExistingSession();
+        this.updateCredentialsDisplay();
+    }
+    
+    updateCredentialsDisplay() {
+        // Update credentials display with actual users from system
+        const users = this.loadUsers();
+        const students = users.filter(u => u.role === 'student').slice(0, 5); // Show first 5 students
+        const teachers = users.filter(u => u.role === 'teacher').slice(0, 3); // Show first 3 teachers
+        
+        const studentCard = document.querySelector('#login-credentials div[style*="border-left: 4px solid #10b981"]');
+        if (studentCard && students.length > 1) {
+            const studentList = students.map(s => 
+                `<div style="margin-top: 5px;"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">${s.username}</code> (${s.studentId || s.name})</div>`
+            ).join('');
+            const studentInfo = studentCard.querySelector('div[style*="font-size: 14px"]');
+            if (studentInfo) {
+                studentInfo.innerHTML = `
+                    <div><strong>Sample Usernames:</strong></div>
+                    ${studentList}
+                    <div style="margin-top: 8px;"><strong>Password:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">student123</code></div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                        <em>Total: ${users.filter(u => u.role === 'student').length} students available</em>
+                    </div>
+                `;
+            }
+        }
+        
+        const teacherCard = document.querySelector('#login-credentials div[style*="border-left: 4px solid #6366f1"]');
+        if (teacherCard && teachers.length > 1) {
+            const teacherList = teachers.map(t => 
+                `<div style="margin-top: 5px;"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">${t.username}</code> (${t.name})</div>`
+            ).join('');
+            const teacherInfo = teacherCard.querySelector('div[style*="font-size: 14px"]');
+            if (teacherInfo) {
+                teacherInfo.innerHTML = `
+                    <div><strong>Sample Usernames:</strong></div>
+                    ${teacherList}
+                    <div style="margin-top: 8px;"><strong>Password:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">teacher123</code></div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                        <em>Total: ${users.filter(u => u.role === 'teacher').length} teachers available</em>
+                    </div>
+                `;
+            }
+        }
     }
 
     loadUsers() {
@@ -58,6 +102,72 @@ class AuthSystem {
             e.preventDefault();
             this.handleLogin();
         });
+        
+        // Add click handlers for credential cards to auto-fill
+        this.setupCredentialClickHandlers();
+    }
+    
+    setupCredentialClickHandlers() {
+        // Use a more reliable method - add data attributes or use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+            const credentialsDiv = document.getElementById('login-credentials');
+            if (!credentialsDiv) return;
+            
+            // Admin credentials - find by text content
+            const cards = credentialsDiv.querySelectorAll('div[style*="border-left"]');
+            cards.forEach(card => {
+                const text = card.textContent;
+                if (text.includes('Administrator') || text.includes('admin')) {
+                    card.style.cursor = 'pointer';
+                    card.style.transition = 'all 0.2s';
+                    card.addEventListener('mouseenter', () => {
+                        card.style.transform = 'translateX(5px)';
+                        card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                    });
+                    card.addEventListener('mouseleave', () => {
+                        card.style.transform = 'translateX(0)';
+                        card.style.boxShadow = 'none';
+                    });
+                    card.addEventListener('click', () => {
+                        document.getElementById('username').value = 'admin';
+                        document.getElementById('password').value = 'admin123';
+                        document.getElementById('role').value = 'admin';
+                    });
+                } else if (text.includes('Teacher') || text.includes('teacher')) {
+                    card.style.cursor = 'pointer';
+                    card.style.transition = 'all 0.2s';
+                    card.addEventListener('mouseenter', () => {
+                        card.style.transform = 'translateX(5px)';
+                        card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                    });
+                    card.addEventListener('mouseleave', () => {
+                        card.style.transform = 'translateX(0)';
+                        card.style.boxShadow = 'none';
+                    });
+                    card.addEventListener('click', () => {
+                        document.getElementById('username').value = 'teacher1';
+                        document.getElementById('password').value = 'teacher123';
+                        document.getElementById('role').value = 'teacher';
+                    });
+                } else if (text.includes('Student') || text.includes('student')) {
+                    card.style.cursor = 'pointer';
+                    card.style.transition = 'all 0.2s';
+                    card.addEventListener('mouseenter', () => {
+                        card.style.transform = 'translateX(5px)';
+                        card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                    });
+                    card.addEventListener('mouseleave', () => {
+                        card.style.transform = 'translateX(0)';
+                        card.style.boxShadow = 'none';
+                    });
+                    card.addEventListener('click', () => {
+                        document.getElementById('username').value = 'student1';
+                        document.getElementById('password').value = 'student123';
+                        document.getElementById('role').value = 'student';
+                    });
+                }
+            });
+        }, 100);
     }
 
     handleLogin() {

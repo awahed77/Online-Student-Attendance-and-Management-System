@@ -530,6 +530,19 @@ class AdminSystem {
         commonSystem.saveSettings();
         alert('Settings saved successfully!');
     }
+    
+    // Add button to re-initialize university data
+    reinitializeUniversityData() {
+        if (confirm('⚠️ This will delete all existing students, teachers, and attendance data and create a fresh university dataset with:\n• ~165 students across 6 classes\n• 20 teachers assigned to different subjects\n\nAre you sure?')) {
+            if (confirm('Last warning! This will DELETE ALL current data (except admin). Continue?')) {
+                if (typeof forceReinitializeUniversityData === 'function') {
+                    forceReinitializeUniversityData();
+                } else {
+                    alert('Re-initialization function not available. Please refresh the page.');
+                }
+            }
+        }
+    }
 }
 
 // Initialize admin system

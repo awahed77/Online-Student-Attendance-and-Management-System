@@ -819,8 +819,8 @@ class TeacherSystem {
         setTimeout(() => {
             this.processScannedQR({
                 studentId: 'S001',
-                class: '10A',
-                subject: 'Mathematics',
+                class: 'Class 01',
+                subject: 'CS301 - Data Structures and Algorithms',
                 timestamp: new Date().toISOString()
             });
         }, 3000);

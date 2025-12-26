@@ -12,6 +12,41 @@ class StudentSystem {
         this.setupNavigation();
         this.setupEventListeners();
         this.loadStudentData();
+        this.detectDeviceType();
+    }
+    
+    detectDeviceType() {
+        const deviceInfo = document.getElementById('device-type');
+        if (!deviceInfo) return;
+        
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const hasCamera = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+        
+        if (isMobile) {
+            deviceInfo.textContent = '📱 Mobile Device Detected - Back camera will be used';
+        } else {
+            deviceInfo.textContent = '💻 PC/Desktop Detected - Webcam will be used (if available)';
+        }
+        
+        if (!hasCamera) {
+            deviceInfo.textContent += ' ⚠️ Camera API not available';
+        }
+    }
+    
+    processManualQRAlways() {
+        const input = document.getElementById('manual-qr-input-always');
+        if (!input || !input.value.trim()) {
+            alert('Please enter QR code data.');
+            return;
+        }
+        
+        try {
+            this.handleScannedCode(input.value.trim());
+            input.value = '';
+            alert('QR code processed successfully!');
+        } catch (error) {
+            alert('Error processing QR code: ' + error.message);
+        }
     }
 
     setupNavigation() {
@@ -307,9 +342,13 @@ class StudentSystem {
     }
 
     async startQRScanner() {
+        console.log('Starting QR scanner...');
+        
         // Check if Html5Qrcode is available
         if (typeof Html5Qrcode === 'undefined') {
+            console.error('Html5Qrcode library not loaded');
             alert('QR Scanner library not loaded. Please refresh the page and try again.');
+            this.showManualEntryOption();
             return;
         }
 
@@ -317,79 +356,208 @@ class StudentSystem {
         const stopBtn = document.getElementById('stop-qr-scanner');
         const qrReader = document.getElementById('qr-reader');
         const locationText = document.getElementById('location-text');
+        const resultsDiv = document.getElementById('qr-reader-results');
         
         if (!startBtn || !stopBtn || !qrReader) {
             alert('QR scanner elements not found. Please refresh the page.');
             return;
         }
         
+        // Show loading message
+        if (resultsDiv) {
+            resultsDiv.innerHTML = '<p style="color: #3b82f6; text-align: center;">Initializing camera...</p>';
+        }
+        
         // Try to get location (but don't block if it fails)
-        const hasLocation = await this.updateLocationStatus();
-        if (!hasLocation) {
-            locationText.textContent = 'Warning: Location not available. QR scanning may still work.';
-            locationText.style.color = '#f39c12';
+        try {
+            const hasLocation = await this.updateLocationStatus();
+            if (!hasLocation) {
+                if (locationText) {
+                    locationText.textContent = 'Warning: Location not available. QR scanning may still work.';
+                    locationText.style.color = '#f39c12';
+                }
+            }
+        } catch (e) {
+            console.warn('Location update failed:', e);
         }
         
         // Clear previous scanner if any
         if (this.html5QrCode) {
             try {
                 await this.html5QrCode.clear();
+                this.html5QrCode = null;
             } catch (e) {
-                // Ignore clear errors
+                console.warn('Error clearing previous scanner:', e);
+                this.html5QrCode = null;
             }
         }
         
         // Clear the reader div
         qrReader.innerHTML = '';
         
+        // Detect device type and camera preference
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        console.log('Device type:', isMobile ? 'Mobile' : 'PC/Desktop');
+        
+        // Try to get available cameras first
+        let cameraId = null;
+        let facingMode = isMobile ? "environment" : "user";
+        
+        try {
+            const devices = await Html5Qrcode.getCameras();
+            console.log('Available cameras:', devices.length);
+            
+            if (devices.length === 0) {
+                throw new Error('No cameras found');
+            }
+            
+            // Prefer back camera on mobile, front camera on PC
+            if (isMobile) {
+                // Find back camera
+                const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
+                cameraId = backCamera ? backCamera.id : devices[devices.length - 1].id;
+            } else {
+                // Find front camera or webcam
+                const frontCamera = devices.find(d => d.label.toLowerCase().includes('front') || d.label.toLowerCase().includes('webcam'));
+                cameraId = frontCamera ? frontCamera.id : devices[0].id;
+            }
+            
+            console.log('Selected camera:', cameraId);
+        } catch (error) {
+            console.warn('Could not enumerate cameras, using facingMode:', error);
+            // Fallback to facingMode
+        }
+        
         // Initialize scanner
         try {
             this.html5QrCode = new Html5Qrcode("qr-reader");
+            console.log('Html5Qrcode instance created');
             
-            // Start scanning
+            // Start scanning with camera ID or facingMode
+            const config = cameraId ? { deviceId: { exact: cameraId } } : { facingMode: facingMode };
+            
+            console.log('Starting scanner with config:', config);
+            
             await this.html5QrCode.start(
-                { facingMode: "environment" },
+                config,
                 {
                     fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0
+                    qrbox: function(viewfinderWidth, viewfinderHeight) {
+                        // Make QR box responsive
+                        const minEdgePercentage = 0.7;
+                        const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                        const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+                        return {
+                            width: qrboxSize,
+                            height: qrboxSize
+                        };
+                    },
+                    aspectRatio: 1.0,
+                    disableFlip: false
                 },
                 (decodedText, decodedResult) => {
-                    // Handle the scanned code (this callback handles successful scans)
+                    // Success callback
+                    console.log('QR Code scanned:', decodedText);
                     this.handleScannedCode(decodedText);
                 },
                 (errorMessage) => {
-                    // Error callback - ignore common "not found" errors
-                    // This runs continuously while scanning
+                    // Error callback - this runs continuously while scanning
+                    // Only log errors that aren't "not found" (which is normal)
+                    if (!errorMessage.includes('NotFoundException')) {
+                        // Don't spam console with scanning errors
+                    }
                 }
             );
+            
+            console.log('Scanner started successfully');
             
             // Update UI
             startBtn.style.display = 'none';
             stopBtn.style.display = 'block';
             qrReader.style.display = 'block';
             
-            // Show success message
-            const resultsDiv = document.getElementById('qr-reader-results');
+            // Show success message with device-specific instructions
             if (resultsDiv) {
-                resultsDiv.innerHTML = '<p style="color: #2ecc71; text-align: center;">Scanner is active. Point camera at QR code.</p>';
+                const deviceMsg = isMobile 
+                    ? '✅ Scanner is active! Point your phone camera at the QR code.'
+                    : '✅ Scanner is active! Point your webcam at the QR code.';
+                resultsDiv.innerHTML = `<p style="color: #10b981; text-align: center; font-weight: 600;">${deviceMsg}</p>`;
             }
             
         } catch (error) {
             console.error('Error starting QR scanner:', error);
-            let errorMsg = 'Failed to start QR scanner. ';
-            if (error.message.includes('Permission denied')) {
-                errorMsg += 'Please allow camera access and try again.';
-            } else if (error.message.includes('not found')) {
-                errorMsg += 'Camera not found. Please check your device.';
+            console.error('Error details:', {
+                message: error.message,
+                name: error.name,
+                stack: error.stack
+            });
+            
+            let errorMsg = 'Failed to start QR scanner.\n\n';
+            let detailedMsg = '';
+            
+            if (error.message.includes('Permission denied') || error.message.includes('NotAllowedError')) {
+                errorMsg += '❌ Camera permission denied.\n';
+                detailedMsg = 'Please:\n1. Click the camera icon in your browser\'s address bar\n2. Allow camera access\n3. Refresh the page and try again';
+            } else if (error.message.includes('not found') || error.message.includes('No devices found') || error.message.includes('NotFoundError')) {
+                errorMsg += '❌ No camera found.\n';
+                detailedMsg = isMobile 
+                    ? 'Please check that your device has a camera and it\'s not being used by another app.'
+                    : 'No webcam detected. Please use the "Enter QR Code Manually" option below.';
+            } else if (error.message.includes('NotReadableError') || error.message.includes('TrackStartError')) {
+                errorMsg += '❌ Camera is already in use.\n';
+                detailedMsg = 'Another application is using your camera. Please close it and try again.';
             } else {
-                errorMsg += 'Please try again or refresh the page.';
+                errorMsg += `❌ Error: ${error.message}\n`;
+                detailedMsg = 'Please try:\n1. Refreshing the page\n2. Using manual entry option\n3. Checking browser console for details';
             }
-            alert(errorMsg);
+            
+            alert(errorMsg + '\n' + detailedMsg);
+            
+            // Show manual entry option
+            this.showManualEntryOption();
             
             // Reset UI
             startBtn.style.display = 'block';
             stopBtn.style.display = 'none';
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `<p style="color: #ef4444; text-align: center;">❌ Scanner failed to start. Use manual entry below.</p>`;
+            }
+        }
+    }
+    
+    showManualEntryOption() {
+        const resultsDiv = document.getElementById('qr-reader-results');
+        if (resultsDiv) {
+            const existing = resultsDiv.querySelector('#manual-entry-section');
+            if (!existing) {
+                const manualSection = document.createElement('div');
+                manualSection.id = 'manual-entry-section';
+                manualSection.style.cssText = 'margin-top: 20px; padding: 20px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;';
+                manualSection.innerHTML = `
+                    <h3 style="margin-bottom: 10px;">📝 Alternative: Enter QR Code Manually</h3>
+                    <p style="color: #92400e; margin-bottom: 15px;">If your camera is not available, you can paste the QR code data here:</p>
+                    <textarea id="manual-qr-input" placeholder='Paste QR code JSON data here (e.g., {"token":"...","class":"Class 01","subject":"CS301 - Data Structures and Algorithms","period":"Period 1"})' style="width: 100%; min-height: 100px; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; font-family: monospace; font-size: 12px;"></textarea>
+                    <button onclick="studentSystem.processManualQR()" class="btn-primary" style="margin-top: 10px;">✅ Submit QR Code</button>
+                `;
+                resultsDiv.appendChild(manualSection);
+            }
+        }
+    }
+    
+    processManualQR() {
+        const input = document.getElementById('manual-qr-input');
+        if (!input || !input.value.trim()) {
+            alert('Please enter QR code data.');
+            return;
+        }
+        
+        try {
+            console.log('Processing manual QR code input');
+            this.handleScannedCode(input.value.trim());
+            input.value = '';
+        } catch (error) {
+            console.error('Error processing manual QR code:', error);
+            alert('Error processing QR code: ' + error.message);
         }
     }
     
@@ -577,9 +745,18 @@ class StudentSystem {
             const date = new Date(notification.date);
             const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
+            // Add subject and class info if available
+            let subjectInfo = '';
+            if (notification.subject) {
+                subjectInfo = `<div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 4px; font-size: 13px;">
+                    <strong>Subject:</strong> ${notification.subject}${notification.class ? ` | <strong>Class:</strong> ${notification.class}` : ''}
+                </div>`;
+            }
+            
             html += `
                 <div class="notification-item ${notification.type || 'info'}">
                     <div class="notification-message">${notification.message}</div>
+                    ${subjectInfo}
                     <div class="notification-date">${dateStr}</div>
                 </div>
             `;
