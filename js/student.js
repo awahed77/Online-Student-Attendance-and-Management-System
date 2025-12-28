@@ -48,6 +48,120 @@ class StudentSystem {
             alert('Error processing QR code: ' + error.message);
         }
     }
+    
+    // Process attendance using random code
+    async processAttendanceCode() {
+        const codeInput = document.getElementById('attendance-code-input');
+        if (!codeInput) {
+            alert('Code input field not found');
+            return;
+        }
+        
+        const code = codeInput.value.trim();
+        
+        if (!code || code.length !== 6) {
+            alert('Please enter a valid 6-digit attendance code');
+            codeInput.focus();
+            return;
+        }
+        
+        // Validate code using QR session manager
+        const validation = qrSessionManager.validateAndUseByCode(code, this.currentStudent.studentId);
+        
+        if (!validation.valid) {
+            alert(validation.error || 'Invalid or expired attendance code. Please check the code and try again.');
+            codeInput.value = '';
+            codeInput.focus();
+            return;
+        }
+        
+        const session = validation.session;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check if already marked
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        const existingIndex = commonSystem.attendanceData.findIndex(record => 
+            record.studentId === this.currentStudent.studentId &&
+            record.class === session.class &&
+            record.subject === session.subject &&
+            record.period === session.period &&
+            record.date === today
+        );
+        
+        if (existingIndex !== -1) {
+            alert('Aap already is class ki attendance mark kar chuke hain!');
+            codeInput.value = '';
+            return;
+        }
+        
+        // Get location if available
+        let location = null;
+        try {
+            if ('geolocation' in navigator) {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: false,
+                        timeout: 5000,
+                        maximumAge: 60000
+                    });
+                });
+                location = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy
+                };
+            }
+        } catch (e) {
+            // Location not available, continue without it
+        }
+        
+        // Mark attendance
+        const attendanceRecord = {
+            id: commonSystem.generateAttendanceId(),
+            studentId: this.currentStudent.studentId,
+            class: session.class,
+            subject: session.subject,
+            period: session.period,
+            date: today,
+            status: 'present',
+            markedBy: session.teacherUsername,
+            markedAt: new Date().toISOString(),
+            method: 'code', // Mark as code-based attendance
+            location: location,
+            attendanceCode: code // Store the code used
+        };
+        
+        // Save attendance
+        commonSystem.attendanceData.push(attendanceRecord);
+        commonSystem.saveAttendanceData();
+        
+        // Reload from localStorage
+        commonSystem.attendanceData = commonSystem.loadAttendanceData();
+        
+        // Check notifications
+        commonSystem.checkLowAttendanceNotifications();
+        
+        // Show success message
+        alert(`✅ Attendance mark ho gayi!\n${session.subject} - ${session.class} - ${session.period}\n\nCode: ${code}`);
+        
+        // Clear input
+        codeInput.value = '';
+        
+        // Reload all student data
+        this.loadStudentData();
+        
+        // Refresh chart if statistics section is active
+        const statsSection = document.getElementById('attendance-stats');
+        if (statsSection && statsSection.classList.contains('active')) {
+            this.loadAttendanceChart();
+        }
+        
+        // Refresh notifications
+        const notifSection = document.getElementById('notifications');
+        if (notifSection && notifSection.classList.contains('active')) {
+            this.loadNotifications();
+        }
+    }
 
     setupNavigation() {
         const navButtons = document.querySelectorAll('#student-dashboard .nav-btn');
@@ -159,6 +273,7 @@ class StudentSystem {
                         <th>Subject</th>
                         <th>Period</th>
                         <th>Status</th>
+                        <th>Method</th>
                         <th>Marked By</th>
                     </tr>
                 </thead>
@@ -169,6 +284,7 @@ class StudentSystem {
         studentRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
         
         studentRecords.forEach(record => {
+            const method = record.method === 'qr' ? '📱 QR Scan' : (record.method === 'code' ? '🔢 Code Entry' : '✍️ Manual');
             html += `
                 <tr>
                     <td>${commonSystem.formatDate(record.date)}</td>
@@ -180,6 +296,7 @@ class StudentSystem {
                             ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
                         </span>
                     </td>
+                    <td>${method}</td>
                     <td>${record.markedBy}</td>
                 </tr>
             `;

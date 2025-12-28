@@ -490,6 +490,40 @@ header h1 {
     background: var(--white);
     border-radius: 12px;
     box-shadow: var(--shadow-md);
+    min-height: 100px;
+    display: block;
+    visibility: visible;
+}
+
+#qr-code-container:empty {
+    display: none;
+}
+
+#qr-code-container:not(:empty) {
+    display: block;
+}
+
+#qr-canvas-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 300px !important;
+    margin: 20px 0 !important;
+    padding: 20px !important;
+    background: white !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    visibility: visible !important;
+}
+
+#qr-canvas-container img,
+#qr-canvas-container canvas {
+    max-width: 300px !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 auto !important;
+    visibility: visible !important;
 }
 
 #qr-scanner {

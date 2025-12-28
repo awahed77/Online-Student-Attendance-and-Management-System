@@ -36,11 +36,13 @@ class QRSessionManager {
     // Create a new QR code session
     createQRSession(teacherId, teacherUsername, className, subject, period) {
         const sessionToken = this.generateToken();
+        const randomCode = this.generateRandomCode(); // Generate 6-digit random number
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
         const createdAt = new Date().toISOString();
 
         const qrSession = {
             token: sessionToken,
+            randomCode: randomCode, // Store random code
             teacherId: teacherId,
             teacherUsername: teacherUsername,
             class: className,
@@ -50,7 +52,8 @@ class QRSessionManager {
             expiresAt: expiresAt.toISOString(),
             used: false,
             usedBy: null,
-            usedAt: null
+            usedAt: null,
+            usedVia: null // 'qr' or 'code'
         };
 
         this.qrSessions[sessionToken] = qrSession;
@@ -59,12 +62,56 @@ class QRSessionManager {
         // Return QR data for encoding
         return {
             token: sessionToken,
+            randomCode: randomCode, // Include in QR data
             class: className,
             subject: subject,
             period: period,
             teacher: teacherUsername,
             expiresAt: expiresAt.toISOString(),
             createdAt: createdAt
+        };
+    }
+    
+    // Generate 6-digit random code
+    generateRandomCode() {
+        return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit number
+    }
+    
+    // Validate and use QR code by random code
+    validateAndUseByCode(randomCode, studentId) {
+        // Reload from localStorage to get latest data
+        this.qrSessions = this.loadQRSessions();
+        
+        // Find session by random code
+        const session = Object.values(this.qrSessions).find(s => 
+            s.randomCode === randomCode && !s.used
+        );
+
+        if (!session) {
+            return { valid: false, error: 'Invalid attendance code' };
+        }
+
+        // Check if expired
+        if (new Date(session.expiresAt) < new Date()) {
+            return { valid: false, error: 'Attendance code has expired' };
+        }
+
+        // Mark as used
+        session.used = true;
+        session.usedBy = studentId;
+        session.usedAt = new Date().toISOString();
+        session.usedVia = 'code';
+        this.saveQRSessions();
+
+        return {
+            valid: true,
+            session: {
+                class: session.class,
+                subject: session.subject,
+                period: session.period,
+                teacherId: session.teacherId,
+                teacherUsername: session.teacherUsername
+            }
         };
     }
 
@@ -93,6 +140,7 @@ class QRSessionManager {
         session.used = true;
         session.usedBy = studentId;
         session.usedAt = new Date().toISOString();
+        session.usedVia = 'qr';
         this.saveQRSessions();
 
         return {

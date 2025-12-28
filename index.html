@@ -251,7 +251,7 @@
                         </select>
                         <button id="generate-qr" class="btn-primary">Generate QR Code</button>
                     </div>
-                    <div id="qr-code-container"></div>
+                    <div id="qr-code-container" style="display: block; visibility: visible; min-height: 100px;"></div>
                     <!-- <div id="qr-scanner">
                         <h3>Scan QR Code</h3>
                         <video id="qr-video" width="300" height="200"></video>
@@ -318,6 +318,17 @@
                             <p style="color: #6b7280; margin-bottom: 15px;">If you're on a PC without a webcam, or prefer to enter the code manually:</p>
                             <textarea id="manual-qr-input-always" placeholder="Paste QR code JSON data here (e.g., {\"token\":\"...\",\"class\":\"Class 01\",\"subject\":\"CS301 - Data Structures and Algorithms\",\"period\":\"Period 1\"})" style="width: 100%; min-height: 120px; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
                             <button onclick="studentSystem.processManualQRAlways()" class="btn-primary" style="margin-top: 10px;">✅ Submit QR Code</button>
+                        </div>
+                        <div id="code-entry-section" style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%); border-radius: 8px; border: 2px solid #3b82f6;">
+                            <h3 style="margin-bottom: 10px; color: #1e40af;">🔢 Enter Attendance Code</h3>
+                            <p style="color: #1e3a8a; margin-bottom: 15px;">Teacher ne jo 6-digit code diya hai, wo yahan enter karein:</p>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="attendance-code-input" placeholder="Enter 6-digit code (e.g., 123456)" maxlength="6" pattern="[0-9]{6}" style="flex: 1; min-width: 200px; padding: 15px; font-size: 24px; text-align: center; border: 2px solid #3b82f6; border-radius: 8px; font-family: 'Courier New', monospace; font-weight: bold; letter-spacing: 4px;" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                <button onclick="studentSystem.processAttendanceCode()" class="btn-primary" style="padding: 15px 30px; font-size: 16px; font-weight: bold;">✅ Mark Attendance</button>
+                            </div>
+                            <p style="color: #1e3a8a; font-size: 12px; margin-top: 10px;">
+                                <strong>Note:</strong> Ye code teacher ne QR code ke sath generate kiya hoga. Agar aapke paas QR scanner nahi hai, to ye code use karein.
+                            </p>
                         </div>
                     </div>
                 </div>

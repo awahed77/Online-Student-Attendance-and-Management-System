@@ -2,6 +2,8 @@
 class TeacherSystem {
     constructor() {
         this.currentTeacher = authSystem.getCurrentUser();
+        this.isGeneratingQR = false; // Flag to prevent multiple QR generations
+        this.qrListenerAttached = false; // Flag to track if QR button listener is attached
         this.init();
     }
 
@@ -59,6 +61,9 @@ class TeacherSystem {
                 }
             }, 100);
         }
+        
+        // QR section doesn't need special event listener handling
+        // Event delegation in setupEventListeners handles it
     }
 
     populateClassAndSubjectFilters() {
@@ -124,10 +129,33 @@ class TeacherSystem {
             exportReportBtn.addEventListener('click', () => this.exportReportPDF());
         }
         
-        // QR Attendance
-        const generateQrBtn = document.getElementById('generate-qr');
-        if (generateQrBtn) {
-            generateQrBtn.addEventListener('click', () => this.generateQRCode());
+        // QR Attendance - Use event delegation on teacher dashboard container
+        // This ensures the listener works even if the button is dynamically loaded
+        const teacherDashboard = document.getElementById('teacher-dashboard');
+        if (teacherDashboard && !this.qrListenerAttached) {
+            // Store the handler function so we can reference it for removal if needed
+            this.qrButtonHandler = (e) => {
+                // Check if the clicked element is the generate QR button or inside it
+                const button = e.target.closest('#generate-qr');
+                if (button && button.id === 'generate-qr') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation(); // Prevent other listeners on the same element
+                    
+                    // Additional guard: prevent if already generating
+                    if (this.isGeneratingQR) {
+                        console.log('QR generation already in progress, ignoring click');
+                        return;
+                    }
+                    
+                    console.log('Generate QR button clicked (via delegation)');
+                    this.generateQRCode();
+                }
+            };
+            
+            teacherDashboard.addEventListener('click', this.qrButtonHandler, { once: false, passive: false });
+            this.qrListenerAttached = true; // Flag to prevent duplicate listeners
+            console.log('QR button event listener attached once');
         }
         
         const startScanBtn = document.getElementById('start-scan');
@@ -443,6 +471,7 @@ class TeacherSystem {
                         <th>Subject</th>
                         <th>Period</th>
                         <th>Status</th>
+                        <th>Method</th>
                         <th>Marked By</th>
                         <th>Actions</th>
                     </tr>
@@ -452,6 +481,7 @@ class TeacherSystem {
 
         filteredRecords.forEach(record => {
             const student = authSystem.users.find(u => u.studentId === record.studentId);
+            const method = record.method === 'qr' ? '📱 QR Scan' : (record.method === 'code' ? '🔢 Code Entry' : '✍️ Manual');
             html += `
                 <tr>
                     <td>${commonSystem.formatDate(record.date)}</td>
@@ -460,6 +490,7 @@ class TeacherSystem {
                     <td>${record.subject}</td>
                     <td>${record.period || 'N/A'}</td>
                     <td>${record.status}</td>
+                    <td>${method}</td>
                     <td>${record.markedBy}</td>
                     <td>
                         <button onclick="teacherSystem.editAttendanceRecord(${record.id})" class="btn-secondary">Edit</button>
@@ -632,19 +663,34 @@ class TeacherSystem {
 
     // QR Attendance
     generateQRCode() {
-        const className = document.getElementById('qr-class-select').value;
-        const subject = document.getElementById('qr-subject-select').value;
-        const period = prompt('Enter period for this QR code (e.g., Period 1, Period 2):', 'Period 1');
-        
-        if (!period) {
-            alert('Period is required');
+        // Prevent multiple simultaneous calls
+        if (this.isGeneratingQR) {
+            console.log('QR generation already in progress...');
             return;
         }
+        
+        this.isGeneratingQR = true;
+        console.log('generateQRCode function called');
+        
+        const className = document.getElementById('qr-class-select')?.value;
+        const subject = document.getElementById('qr-subject-select')?.value;
+        
+        console.log('Selected class:', className, 'Subject:', subject);
         
         if (!className || !subject) {
             alert('Please select both class and subject');
+            this.isGeneratingQR = false;
             return;
         }
+        
+        const period = prompt('Enter period for this QR code (e.g., Period 1, Period 2):', 'Period 1');
+        
+        if (!period) {
+            this.isGeneratingQR = false;
+            return;
+        }
+        
+        console.log('Period:', period);
 
         // Create secure QR session using QR session manager
         const qrData = qrSessionManager.createQRSession(
@@ -657,6 +703,18 @@ class TeacherSystem {
 
         const qrString = JSON.stringify(qrData);
         const container = document.getElementById('qr-code-container');
+        
+        if (!container) {
+            alert('QR code container not found. Please refresh the page.');
+            this.isGeneratingQR = false;
+            return;
+        }
+        
+        // Clear container first
+        container.innerHTML = '';
+        
+        console.log('Generating QR code with data:', qrData);
+        console.log('Random code:', qrData.randomCode);
         
         // Create a simple QR code pattern as a fallback
         const createDummyQRCode = () => {
@@ -720,81 +778,58 @@ class TeacherSystem {
         const expiresAt = new Date(qrData.expiresAt);
         const timeRemaining = Math.round((expiresAt - new Date()) / 1000 / 60);
 
-        // Create container for QR code
+        // Create container for QR code with random number
         container.innerHTML = `
             <div style="text-align: center; margin-bottom: 20px;">
                 <h3 style="color: #1f2937; margin-bottom: 10px;">QR Code for ${className} - ${subject} - ${period}</h3>
                 <p style="color: #6b7280; font-size: 14px;">Valid for ${timeRemaining} minutes • One-time use only</p>
             </div>
-            <div id="qr-canvas-container" style="display: flex; justify-content: center; margin: 20px 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <!-- QR code will be generated here -->
+            <div id="qr-canvas-container" style="display: flex !important; justify-content: center !important; align-items: center !important; min-height: 300px !important; margin: 20px 0 !important; padding: 20px !important; background: white !important; border-radius: 12px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; visibility: visible !important;">
+                <div style="text-align: center;">
+                    <div class="spinner" style="border: 4px solid #f3f4f6; border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    <p style="margin-top: 15px; color: #6b7280;">Generating QR Code...</p>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; border: 2px solid #f59e0b;">
+                <h4 style="color: #92400e; margin-bottom: 15px; font-size: 18px;">🔢 Attendance Code (Alternative Method)</h4>
+                <div style="font-size: 48px; font-weight: bold; color: #78350f; letter-spacing: 8px; margin: 15px 0; font-family: 'Courier New', monospace;">
+                    ${qrData.randomCode}
+                </div>
+                <p style="color: #92400e; font-size: 14px; margin-top: 10px;">
+                    Students can enter this code manually if QR scanning is not available
+                </p>
             </div>
         `;
         
-        const qrCanvasContainer = document.getElementById('qr-canvas-container');
-        
-        // Generate QR code using QRCode.js library
-        if (typeof QRCode !== 'undefined') {
-            // Create canvas element
-            const canvas = document.createElement('canvas');
-            qrCanvasContainer.appendChild(canvas);
-            
-            try {
-                // QRCode.js version 1.5.3 uses toCanvas differently
-                QRCode.toCanvas(canvas, qrString, function (error) {
-                    if (error) {
-                        console.error('QR Code generation error:', error);
-                        // Try alternative method
-                        QRCode.toDataURL(qrString, function (err, url) {
-                            if (err) {
-                                qrCanvasContainer.innerHTML = `
-                                    <div style="text-align: center; padding: 20px;">
-                                        <p style="color: #ef4444; margin-bottom: 10px;">QR Code generation failed</p>
-                                        <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px; font-family: monospace; font-size: 11px; word-break: break-all;">
-                                            ${qrString}
-                                        </div>
-                                    </div>
-                                `;
-                            } else {
-                                qrCanvasContainer.innerHTML = `<img src="${url}" alt="QR Code" style="max-width: 300px; border: 2px solid #e5e7eb; padding: 10px; background: white; border-radius: 8px;">`;
-                            }
-                        });
-                    } else {
-                        // Successfully generated QR code
-                        console.log('QR Code generated successfully');
-                    }
-                });
-            } catch (error) {
-                console.error('QR Code library error:', error);
-                qrCanvasContainer.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <p style="color: #ef4444; margin-bottom: 10px;">QR Code library error</p>
-                        <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px; font-family: monospace; font-size: 12px; word-break: break-all;">
-                            ${qrString}
-                        </div>
-                    </div>
-                `;
-            }
-        } else {
-            // Fallback: Show QR data as text if library not loaded
-            qrCanvasContainer.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <img src="${createDummyQRCode()}" alt="QR Code" style="border: 2px solid #e5e7eb; padding: 15px; background: white; border-radius: 8px; margin-bottom: 15px;">
-                    <p style="color: #6b7280; font-size: 12px; margin-bottom: 10px;">QR Code library not loaded. Please scan the text below:</p>
-                    <div style="padding: 15px; background: #f3f4f6; border-radius: 8px; font-family: monospace; font-size: 11px; word-break: break-all; max-width: 400px; margin: 0 auto;">
-                        ${qrString}
-                    </div>
-                </div>
+        // Add spinner animation CSS
+        if (!document.getElementById('qr-spinner-style')) {
+            const style = document.createElement('style');
+            style.id = 'qr-spinner-style';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
             `;
+            document.head.appendChild(style);
         }
         
-        container.innerHTML += `
+        const qrCanvasContainer = document.getElementById('qr-canvas-container');
+        
+        if (!qrCanvasContainer) {
+            alert('QR canvas container not found');
+            return;
+        }
+        
+        // Add details section first (before QR generation)
+        const detailsHTML = `
             <div style="background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #3b82f6;">
                 <h4 style="color: #1f2937; margin-bottom: 15px; font-size: 16px;">QR Code Details</h4>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; color: #374151;">
                     <strong>Class:</strong> <span>${className}</span>
                     <strong>Subject:</strong> <span>${subject}</span>
                     <strong>Period:</strong> <span>${period}</span>
+                    <strong>Attendance Code:</strong> <span style="font-family: monospace; font-size: 18px; font-weight: bold; color: #1e40af;">${qrData.randomCode}</span>
                     <strong>Token:</strong> <span style="font-family: monospace; font-size: 12px;">${qrData.token}</span>
                     <strong>Expires:</strong> <span>${expiresAt.toLocaleTimeString()} (${timeRemaining} min remaining)</span>
                     <strong>Status:</strong> <span style="color: #10b981; font-weight: 600;">Active - One-time use</span>
@@ -802,10 +837,160 @@ class TeacherSystem {
             </div>
             <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 15px; border-radius: 10px; border-left: 4px solid #f59e0b; margin-top: 15px;">
                 <p style="color: #92400e; font-size: 13px; margin: 0;">
-                    <strong>Note:</strong> Students can scan this QR code to mark attendance. Each QR code can only be used once and expires in 15 minutes. Make sure students scan it before it expires.
+                    <strong>Note:</strong> Students can scan this QR code OR enter the 6-digit attendance code (${qrData.randomCode}) to mark attendance. Each code can only be used once and expires in 15 minutes.
                 </p>
             </div>
         `;
+        container.insertAdjacentHTML('beforeend', detailsHTML);
+        
+        // Generate QR code - Simplified and more reliable approach
+        console.log('Checking QRCode library:', typeof QRCode);
+        
+        // Function to generate and display QR code - using arrow function to preserve 'this'
+        const generateAndDisplayQR = () => {
+            const self = this; // Store reference to teacherSystem instance
+            
+            console.log('generateAndDisplayQR called, QRCode type:', typeof QRCode);
+            console.log('qrCanvasContainer:', qrCanvasContainer);
+            
+            if (typeof QRCode === 'undefined') {
+                console.error('QRCode library not loaded!');
+                const dummyQR = createDummyQRCode();
+                qrCanvasContainer.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <p style="color: #ef4444; margin-bottom: 15px; font-weight: bold;">❌ QR Code Library Not Loaded</p>
+                        <p style="color: #6b7280; margin-bottom: 15px;">Please refresh the page to load the QR code library.</p>
+                        <img src="${dummyQR}" alt="QR Code" style="border: 2px solid #e5e7eb; padding: 15px; background: white; border-radius: 8px; margin: 15px auto; max-width: 300px; width: 100%; height: auto; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                        <div style="padding: 15px; background: #f3f4f6; border-radius: 8px; font-family: monospace; font-size: 11px; word-break: break-all; max-width: 400px; margin: 15px auto;">
+                            <strong>QR Data:</strong><br>${qrString}
+                        </div>
+                    </div>
+                `;
+                self.isGeneratingQR = false;
+                return;
+            }
+            
+            console.log('QRCode library found, generating QR code...');
+            console.log('QR String length:', qrString.length);
+            
+            // Try toDataURL first (most reliable for displaying as image)
+            try {
+                QRCode.toDataURL(qrString, {
+                    width: 300,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    },
+                    errorCorrectionLevel: 'M'
+                }, (err, url) => {
+                    console.log('toDataURL callback called, err:', err, 'url length:', url ? url.length : 0);
+                    
+                    if (err) {
+                        console.error('QR Code toDataURL error:', err);
+                        // Fallback to canvas
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 300;
+                        canvas.height = 300;
+                        canvas.style.cssText = 'max-width: 300px !important; width: 100% !important; height: auto !important; border: 2px solid #e5e7eb !important; padding: 10px !important; background: white !important; border-radius: 8px !important; display: block !important; margin: 15px auto !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; visibility: visible !important;';
+                        
+                        qrCanvasContainer.innerHTML = '';
+                        qrCanvasContainer.appendChild(canvas);
+                        
+                        QRCode.toCanvas(canvas, qrString, {
+                            width: 300,
+                            margin: 2,
+                            color: {
+                                dark: '#000000',
+                                light: '#FFFFFF'
+                            },
+                            errorCorrectionLevel: 'M'
+                        }, (error) => {
+                            if (error) {
+                                console.error('QR Code toCanvas also failed:', error);
+                                qrCanvasContainer.innerHTML = `
+                                    <div style="text-align: center; padding: 20px;">
+                                        <p style="color: #ef4444; margin-bottom: 10px; font-weight: bold;">❌ QR Code Generation Failed</p>
+                                        <p style="color: #6b7280; margin-bottom: 15px;">Error: ${error.message || 'Unknown error'}</p>
+                                        <div style="margin-top: 20px; padding: 15px; background: #f3f4f6; border-radius: 8px; font-family: monospace; font-size: 11px; word-break: break-all;">
+                                            <strong>QR Data (use manual entry):</strong><br>${qrString}
+                                        </div>
+                                    </div>
+                                `;
+                                self.isGeneratingQR = false;
+                            } else {
+                                console.log('✅ QR Code generated successfully via toCanvas!');
+                                console.log('Canvas element:', canvas);
+                                console.log('Canvas parent:', canvas.parentElement);
+                                self.isGeneratingQR = false;
+                            }
+                        });
+                    } else {
+                        // Success with toDataURL
+                        console.log('✅ QR Code generated successfully via toDataURL!');
+                        console.log('QR Code URL length:', url.length);
+                        console.log('QR Code URL preview:', url.substring(0, 50) + '...');
+                        
+                        // Clear and set QR code image
+                        qrCanvasContainer.innerHTML = '';
+                        const qrImageDiv = document.createElement('div');
+                        qrImageDiv.style.cssText = 'text-align: center; width: 100%;';
+                        qrImageDiv.innerHTML = `
+                            <img src="${url}" alt="QR Code" style="max-width: 300px !important; width: 100% !important; height: auto !important; border: 2px solid #e5e7eb !important; padding: 15px !important; background: white !important; border-radius: 8px !important; display: block !important; margin: 15px auto !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; visibility: visible !important;">
+                            <p style="margin-top: 15px; color: #6b7280; font-size: 14px;">Scan this QR code to mark attendance</p>
+                        `;
+                        qrCanvasContainer.appendChild(qrImageDiv);
+                        
+                        // Force reflow to ensure visibility
+                        qrCanvasContainer.offsetHeight;
+                        
+                        console.log('QR code image inserted into container');
+                        console.log('Container innerHTML length:', qrCanvasContainer.innerHTML.length);
+                        self.isGeneratingQR = false;
+                    }
+                });
+            } catch (error) {
+                console.error('Exception in QR code generation:', error);
+                qrCanvasContainer.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <p style="color: #ef4444; margin-bottom: 10px; font-weight: bold;">❌ Exception Generating QR Code</p>
+                        <p style="color: #6b7280; margin-bottom: 15px;">${error.message || 'Unknown error'}</p>
+                    </div>
+                `;
+                self.isGeneratingQR = false;
+            }
+        };
+        
+        // Ensure container is visible
+        container.style.display = 'block';
+        container.style.visibility = 'visible';
+        container.style.opacity = '1';
+        
+        // Wait a bit to ensure DOM is ready and library is loaded
+        if (typeof QRCode !== 'undefined') {
+            // Library already loaded, generate immediately
+            console.log('QRCode library ready, generating...');
+            setTimeout(() => {
+                generateAndDisplayQR();
+            }, 100);
+        } else {
+            // Wait for library to load
+            console.log('Waiting for QRCode library to load...');
+            let attempts = 0;
+            const maxAttempts = 30; // Wait up to 3 seconds
+            const checkLibrary = setInterval(() => {
+                attempts++;
+                if (typeof QRCode !== 'undefined') {
+                    console.log('QRCode library loaded after', attempts, 'attempts');
+                    clearInterval(checkLibrary);
+                    generateAndDisplayQR();
+                } else if (attempts >= maxAttempts) {
+                    console.error('QRCode library failed to load after', maxAttempts, 'attempts');
+                    clearInterval(checkLibrary);
+                    generateAndDisplayQR(); // Will show error message
+                }
+            }, 100);
+        }
     }
 
     startQRScanner() {
