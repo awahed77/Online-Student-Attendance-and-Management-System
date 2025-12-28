@@ -18,36 +18,72 @@ class AuthSystem {
         this.setupLoginForm();
         this.checkExistingSession();
         this.updateCredentialsDisplay();
+        
+        // Refresh credentials display periodically and when login section is shown
+        setInterval(() => {
+            if (document.getElementById('login-section')?.classList.contains('active')) {
+                this.updateCredentialsDisplay();
+            }
+        }, 2000); // Refresh every 2 seconds when on login page
     }
     
     updateCredentialsDisplay() {
         // Update credentials display with actual users from system
         const users = this.loadUsers();
-        const students = users.filter(u => u.role === 'student').slice(0, 5); // Show first 5 students
-        const teachers = users.filter(u => u.role === 'teacher').slice(0, 3); // Show first 3 teachers
+        const students = users.filter(u => u.role === 'student').slice(0, 10); // Show first 10 students
+        const teachers = users.filter(u => u.role === 'teacher').slice(0, 5); // Show first 5 teachers
         
         const studentCard = document.querySelector('#login-credentials div[style*="border-left: 4px solid #10b981"]');
-        if (studentCard && students.length > 1) {
-            const studentList = students.map(s => 
-                `<div style="margin-top: 5px;"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">${s.username}</code> (${s.studentId || s.name})</div>`
-            ).join('');
+        if (studentCard) {
+            let studentListHTML = '';
+            if (students.length > 0) {
+                studentListHTML = students.map(s => {
+                    const name = s.name || s.username;
+                    const studentId = s.studentId || '';
+                    return `
+                        <div style="margin: 8px 0; padding: 8px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb; cursor: pointer;" 
+                             onclick="document.getElementById('username').value='${s.username}'; document.getElementById('password').value='student123'; document.getElementById('role').value='student';"
+                             onmouseover="this.style.background='#f3f4f6'" 
+                             onmouseout="this.style.background='#f9fafb'">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                <div>
+                                    <strong style="color: #059669;">👤 ${name}</strong>
+                                    ${studentId ? `<span style="color: #6b7280; font-size: 12px;">(${studentId})</span>` : ''}
+                                </div>
+                                <div style="display: flex; gap: 15px; align-items: center;">
+                                    <div><strong>Username:</strong> <code style="background: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; color: #1f2937;">${s.username}</code></div>
+                                    <div><strong>Password:</strong> <code style="background: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; color: #1f2937;">student123</code></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
             const studentInfo = studentCard.querySelector('div[style*="font-size: 14px"]');
             if (studentInfo) {
+                const totalStudents = users.filter(u => u.role === 'student').length;
                 studentInfo.innerHTML = `
-                    <div><strong>Sample Usernames:</strong></div>
-                    ${studentList}
-                    <div style="margin-top: 8px;"><strong>Password:</strong> <code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">student123</code></div>
-                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-                        <em>Total: ${users.filter(u => u.role === 'student').length} students available</em>
+                    <div style="margin-bottom: 12px;">
+                        <strong style="color: #059669; font-size: 15px;">📋 Student Credentials (Click to Auto-Fill)</strong>
+                    </div>
+                    <div style="max-height: 400px; overflow-y: auto; padding: 10px; background: #ffffff; border-radius: 6px; border: 1px solid #d1d5db;">
+                        ${studentListHTML || '<div style="color: #6b7280; font-style: italic;">No students found. Please initialize the system first.</div>'}
+                    </div>
+                    <div style="margin-top: 12px; padding: 10px; background: #d1fae5; border-radius: 6px; border-left: 4px solid #10b981;">
+                        <div style="font-size: 13px; color: #065f46;">
+                            <strong>ℹ️ Info:</strong> All students use the same password: <code style="background: white; padding: 2px 6px; border-radius: 3px; font-weight: bold;">student123</code>
+                            ${totalStudents > 0 ? `<br>Total students in system: <strong>${totalStudents}</strong>` : ''}
+                        </div>
                     </div>
                 `;
             }
         }
         
         const teacherCard = document.querySelector('#login-credentials div[style*="border-left: 4px solid #6366f1"]');
-        if (teacherCard && teachers.length > 1) {
+        if (teacherCard && teachers.length > 0) {
             const teacherList = teachers.map(t => 
-                `<div style="margin-top: 5px;"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">${t.username}</code> (${t.name})</div>`
+                `<div style="margin: 5px 0; padding: 5px; cursor: pointer;" onclick="document.getElementById('username').value='${t.username}'; document.getElementById('password').value='teacher123'; document.getElementById('role').value='teacher';"><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 3px;">${t.username}</code> - ${t.name}</div>`
             ).join('');
             const teacherInfo = teacherCard.querySelector('div[style*="font-size: 14px"]');
             if (teacherInfo) {

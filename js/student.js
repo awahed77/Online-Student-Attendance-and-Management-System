@@ -89,7 +89,7 @@ class StudentSystem {
         );
         
         if (existingIndex !== -1) {
-            alert('Aap already is class ki attendance mark kar chuke hain!');
+            alert('You have already marked attendance for this class!');
             codeInput.value = '';
             return;
         }
@@ -141,8 +141,11 @@ class StudentSystem {
         // Check notifications
         commonSystem.checkLowAttendanceNotifications();
         
+        // Create success notification
+        this.createAttendanceNotification(session, code);
+        
         // Show success message
-        alert(`✅ Attendance mark ho gayi!\n${session.subject} - ${session.class} - ${session.period}\n\nCode: ${code}`);
+        alert(`✅ Attendance marked successfully!\n${session.subject} - ${session.class} - ${session.period}\n\nCode: ${code}`);
         
         // Clear input
         codeInput.value = '';
@@ -306,10 +309,129 @@ class StudentSystem {
         container.innerHTML = html;
     }
 
+    // Create attendance notification
+    createAttendanceNotification(session, code = null, method = 'code') {
+        try {
+            const allNotifications = JSON.parse(localStorage.getItem('attendance_notifications') || '[]');
+            const notification = {
+                id: 'att_' + Date.now(),
+                studentId: this.currentStudent.studentId,
+                type: 'success',
+                message: `✅ Attendance Marked Successfully!`,
+                subject: session.subject,
+                class: session.class,
+                period: session.period,
+                method: method,
+                code: code,
+                date: new Date().toISOString()
+            };
+            
+            allNotifications.push(notification);
+            localStorage.setItem('attendance_notifications', JSON.stringify(allNotifications));
+        } catch (error) {
+            console.error('Error creating notification:', error);
+        }
+    }
+
     loadAttendanceChart() {
         // Reload data before generating chart
         commonSystem.attendanceData = commonSystem.loadAttendanceData();
         
+        const container = document.querySelector('#attendance-stats .stats-container');
+        if (!container) {
+            console.error('Stats container not found');
+            return;
+        }
+        
+        const studentRecords = commonSystem.attendanceData.filter(record => 
+            record.studentId === this.currentStudent.studentId
+        );
+
+        if (studentRecords.length === 0) {
+            container.innerHTML = '<p style="text-align: center; padding: 20px; color: #7f8c8d;">No attendance data available.</p>';
+            return;
+        }
+
+        // Group by subject and calculate percentages
+        const subjectStats = {};
+        commonSystem.subjects.forEach(subject => {
+            const subjectRecords = studentRecords.filter(record => record.subject === subject);
+            if (subjectRecords.length > 0) {
+                const presentCount = subjectRecords.filter(record => 
+                    record.status === 'present' || record.status === 'late'
+                ).length;
+                const percentage = Math.round((presentCount / subjectRecords.length) * 100);
+                subjectStats[subject] = {
+                    percentage: percentage,
+                    present: presentCount,
+                    total: subjectRecords.length
+                };
+            }
+        });
+
+        const subjects = Object.keys(subjectStats);
+        const percentages = Object.values(subjectStats).map(s => s.percentage);
+
+        // Create detailed statistics table
+        let html = `
+            <div style="margin-bottom: 30px;">
+                <h3 style="margin-bottom: 15px; color: #1f2937;">📊 Detailed Attendance Statistics</h3>
+                <div style="overflow-x: auto;">
+                    <table class="data-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Class</th>
+                                <th>Subject</th>
+                                <th>Period</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Method</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+
+        // Sort by date, most recent first
+        studentRecords.sort((a, b) => new Date(b.date + 'T' + (b.markedAt || '')) - new Date(a.date + 'T' + (a.markedAt || '')));
+        
+        studentRecords.forEach(record => {
+            const method = record.method === 'qr' ? '📱 QR Scan' : (record.method === 'code' ? '🔢 Code Entry' : '✍️ Manual');
+            html += `
+                <tr>
+                    <td>${record.class}</td>
+                    <td>${record.subject}</td>
+                    <td>${record.period || 'N/A'}</td>
+                    <td>${commonSystem.formatDate(record.date)}</td>
+                    <td>
+                        <span class="status-${record.status}">
+                            ${record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                        </span>
+                    </td>
+                    <td>${method}</td>
+                    <td>${record.markedBy || 'N/A'}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        // Add chart section
+        html += `
+            <div style="margin-top: 30px;">
+                <h3 style="margin-bottom: 15px; color: #1f2937;">📈 Attendance Percentage by Subject</h3>
+                <canvas id="attendance-chart" width="400" height="200"></canvas>
+            </div>
+        `;
+
+        container.innerHTML = html;
+
+        // Now create the chart
         const canvas = document.getElementById('attendance-chart');
         if (!canvas) {
             console.error('Chart canvas not found');
@@ -322,25 +444,71 @@ class StudentSystem {
         }
         
         const ctx = canvas.getContext('2d');
-        const studentRecords = commonSystem.attendanceData.filter(record => 
-            record.studentId === this.currentStudent.studentId
-        );
 
-        // Group by subject and calculate percentages
-        const subjectStats = {};
-        commonSystem.subjects.forEach(subject => {
-            const subjectRecords = studentRecords.filter(record => record.subject === subject);
-            if (subjectRecords.length > 0) {
-                const presentCount = subjectRecords.filter(record => 
-                    record.status === 'present' || record.status === 'late'
-                ).length;
-                const percentage = Math.round((presentCount / subjectRecords.length) * 100);
-                subjectStats[subject] = percentage;
+        // Check if Chart.js is available
+        if (typeof Chart === 'undefined') {
+            const chartContainer = canvas.parentElement;
+            chartContainer.innerHTML = '<p style="text-align: center; padding: 20px; color: red;">Chart.js library not loaded. Please refresh the page.</p>';
+            return;
+        }
+
+        if (subjects.length === 0) {
+            canvas.style.display = 'none';
+            return;
+        }
+
+        this.attendanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: subjects,
+                datasets: [{
+                    label: 'Attendance Percentage by Subject',
+                    data: percentages,
+                    backgroundColor: percentages.map(p => 
+                        p >= commonSystem.settings.attendanceThreshold ? '#2ecc71' : '#e74c3c'
+                    ),
+                    borderColor: '#34495e',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Percentage (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Subjects'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const subject = subjects[context.dataIndex];
+                                const stats = subjectStats[subject];
+                                return `Attendance: ${context.parsed.y}% (${stats.present}/${stats.total})`;
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 1000
+                }
             }
         });
-
-        const subjects = Object.keys(subjectStats);
-        const percentages = Object.values(subjectStats);
 
         // Check if Chart.js is available
         if (typeof Chart === 'undefined') {
@@ -795,6 +963,9 @@ class StudentSystem {
             // Check notifications
             commonSystem.checkLowAttendanceNotifications();
             
+            // Create success notification
+            this.createAttendanceNotification(session, null, 'qr');
+            
             // Show success message
             alert(`Attendance marked successfully!\n${session.subject} - ${session.class} - ${session.period}`);
             
@@ -866,14 +1037,24 @@ class StudentSystem {
             let subjectInfo = '';
             if (notification.subject) {
                 subjectInfo = `<div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 4px; font-size: 13px;">
-                    <strong>Subject:</strong> ${notification.subject}${notification.class ? ` | <strong>Class:</strong> ${notification.class}` : ''}
+                    <strong>Subject:</strong> ${notification.subject}${notification.class ? ` | <strong>Class:</strong> ${notification.class}` : ''}${notification.period ? ` | <strong>Period:</strong> ${notification.period}` : ''}
+                </div>`;
+            }
+            
+            // Add method and code info for attendance notifications
+            let methodInfo = '';
+            if (notification.method) {
+                const methodText = notification.method === 'qr' ? '📱 QR Scan' : (notification.method === 'code' ? '🔢 Code Entry' : '✍️ Manual');
+                methodInfo = `<div style="margin-top: 5px; font-size: 12px; color: #059669;">
+                    <strong>Method:</strong> ${methodText}${notification.code ? ` | <strong>Code:</strong> ${notification.code}` : ''}
                 </div>`;
             }
             
             html += `
-                <div class="notification-item ${notification.type || 'info'}">
+                <div class="notification-item ${notification.type || 'info'} ${notification.type === 'success' ? 'success' : ''}">
                     <div class="notification-message">${notification.message}</div>
                     ${subjectInfo}
+                    ${methodInfo}
                     <div class="notification-date">${dateStr}</div>
                 </div>
             `;
@@ -898,6 +1079,10 @@ style.textContent = `
     }
     .notification-item.warning {
         border-left-color: #e74c3c;
+    }
+    .notification-item.success {
+        border-left-color: #10b981;
+        background: #f0fdf4;
     }
     .notification-message {
         font-weight: 500;
