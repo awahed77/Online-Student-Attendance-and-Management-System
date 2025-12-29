@@ -4,6 +4,8 @@ class TeacherSystem {
         this.currentTeacher = authSystem.getCurrentUser();
         this.isGeneratingQR = false; // Flag to prevent multiple QR generations
         this.qrListenerAttached = false; // Flag to track if QR button listener is attached
+        this.attendanceMonitoringInterval = null; // Interval for monitoring attendance
+        this.currentQRSession = null; // Current QR session token
         this.init();
     }
 
@@ -778,26 +780,50 @@ class TeacherSystem {
         const expiresAt = new Date(qrData.expiresAt);
         const timeRemaining = Math.round((expiresAt - new Date()) / 1000 / 60);
 
-        // Create container for QR code with random number
+        // Create container for QR code with green border and session info
+        const sessionId = `QR_${Date.now()}_${qrData.token.substring(0, 20)}`;
+        const validUntil = expiresAt.toLocaleString('en-GB', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        
         container.innerHTML = `
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h3 style="color: #1f2937; margin-bottom: 10px;">QR Code for ${className} - ${subject} - ${period}</h3>
-                <p style="color: #6b7280; font-size: 14px;">Valid for ${timeRemaining} minutes • One-time use only</p>
-            </div>
-            <div id="qr-canvas-container" style="display: flex !important; justify-content: center !important; align-items: center !important; min-height: 300px !important; margin: 20px 0 !important; padding: 20px !important; background: white !important; border-radius: 12px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; visibility: visible !important;">
-                <div style="text-align: center;">
-                    <div class="spinner" style="border: 4px solid #f3f4f6; border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                    <p style="margin-top: 15px; color: #6b7280;">Generating QR Code...</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <!-- QR Code with Green Border -->
+                <div id="qr-canvas-container" style="display: flex !important; justify-content: center !important; align-items: center !important; min-height: 400px !important; margin: 20px auto !important; padding: 30px !important; background: white !important; border: 4px solid #10b981 !important; border-radius: 12px !important; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2) !important; visibility: visible !important; max-width: 500px;">
+                    <div style="text-align: center; width: 100%;">
+                        <div class="spinner" style="border: 4px solid #f3f4f6; border-top: 4px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                        <p style="margin-top: 15px; color: #6b7280;">Generating QR Code...</p>
+                    </div>
                 </div>
-            </div>
-            <div style="text-align: center; margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; border: 2px solid #f59e0b;">
-                <h4 style="color: #92400e; margin-bottom: 15px; font-size: 18px;">🔢 Attendance Code (Alternative Method)</h4>
-                <div style="font-size: 48px; font-weight: bold; color: #78350f; letter-spacing: 8px; margin: 15px 0; font-family: 'Courier New', monospace;">
-                    ${qrData.randomCode}
+                
+                <!-- Session Information in Green Text -->
+                <div style="text-align: center; margin-top: 25px; color: #10b981; font-size: 16px; line-height: 1.8;">
+                    <div style="font-weight: 600; margin-bottom: 8px;">QR Code Session: ${className} - ${subject}</div>
+                    <div style="font-size: 14px; margin-bottom: 5px;">Session ID: <span style="font-family: monospace; font-size: 13px;">${sessionId}</span></div>
+                    <div style="font-size: 14px; margin-bottom: 5px;">Valid until: ${validUntil}</div>
+                    <div style="font-size: 14px; margin-top: 10px; font-weight: 500;">Display this QR code for students to scan</div>
                 </div>
-                <p style="color: #92400e; font-size: 14px; margin-top: 10px;">
-                    Students can enter this code manually if QR scanning is not available
-                </p>
+                
+                <!-- Real-time Attendance Status -->
+                <div style="margin-top: 30px; padding: 20px; background: #374151; border-radius: 12px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                    <div style="color: white; font-weight: 600; font-size: 16px; margin-bottom: 15px; text-align: center;">Attendance (Real-time)</div>
+                    <div id="attendance-status" style="color: #d1d5db; text-align: center; font-size: 14px; padding: 10px; background: #4b5563; border-radius: 8px;">
+                        Waiting for students to scan...
+                    </div>
+                    <div id="attendance-count" style="color: #10b981; text-align: center; font-size: 18px; font-weight: bold; margin-top: 15px; display: none;">
+                        <span id="scanned-count">0</span> student(s) scanned
+                    </div>
+                </div>
+                
+                <!-- Stop Session Button -->
+                <button id="stop-qr-session" onclick="teacherSystem.stopQRSession()" style="margin-top: 25px; padding: 12px 30px; background: #374151; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.3s;">
+                    Stop Session
+                </button>
             </div>
         `;
         
@@ -931,15 +957,18 @@ class TeacherSystem {
                         console.log('QR Code URL length:', url.length);
                         console.log('QR Code URL preview:', url.substring(0, 50) + '...');
                         
-                        // Clear and set QR code image
+                        // Clear and set QR code image with green border
                         qrCanvasContainer.innerHTML = '';
                         const qrImageDiv = document.createElement('div');
                         qrImageDiv.style.cssText = 'text-align: center; width: 100%;';
                         qrImageDiv.innerHTML = `
-                            <img src="${url}" alt="QR Code" style="max-width: 300px !important; width: 100% !important; height: auto !important; border: 2px solid #e5e7eb !important; padding: 15px !important; background: white !important; border-radius: 8px !important; display: block !important; margin: 15px auto !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; visibility: visible !important;">
-                            <p style="margin-top: 15px; color: #6b7280; font-size: 14px;">Scan this QR code to mark attendance</p>
+                            <img src="${url}" alt="QR Code" style="max-width: 350px !important; width: 100% !important; height: auto !important; padding: 20px !important; background: white !important; border-radius: 8px !important; display: block !important; margin: 0 auto !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; visibility: visible !important;">
                         `;
                         qrCanvasContainer.appendChild(qrImageDiv);
+                        
+                        // Start monitoring attendance
+                        const sessionId = `QR_${Date.now()}_${qrData.token.substring(0, 20)}`;
+                        self.startAttendanceMonitoring(qrData.token, sessionId);
                         
                         // Force reflow to ensure visibility
                         qrCanvasContainer.offsetHeight;
